@@ -18,20 +18,20 @@ set -uo pipefail
 declare -A MODEL_PARAMS
 
 # 1. Gemma 4 (Full MTP Support)
-MODEL_PARAMS["gemma4"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-27b|bf16|true|google/gemma-4-26B-A4B-it-assistant|NEXTN|--reasoning-parser gemma4 --tool-call-parser gemma4"
+MODEL_PARAMS["gemma4"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-27b|bfloat16|true|google/gemma-4-26B-A4B-it-assistant|NEXTN|--reasoning-parser gemma4 --tool-call-parser gemma4"
 
 # 2. Qwen 3.6 Series (Mamba Scheduler Support)
-MODEL_PARAMS["qwen3.6-35b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-MoE|bf16|false|||--mamba-scheduler-strategy extra_buffer"
-MODEL_PARAMS["qwen3.6-27b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-27B|bf16|false|||--mamba-scheduler-strategy extra_buffer"
+MODEL_PARAMS["qwen3.6-35b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-MoE|bfloat16|false|||--mamba-scheduler-strategy extra_buffer"
+MODEL_PARAMS["qwen3.6-27b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-27B|bfloat16|false|||--mamba-scheduler-strategy extra_buffer"
 
 # 3. NVIDIA Nemotron (Specialized Kernels)
-MODEL_PARAMS["nemotron"]="lmsysorg/sglang:dev-cu13-nemotronh-nano-omni-reasoning-v3|nvidia/nemotron-nano-omni|bf16|false|||"
+MODEL_PARAMS["nemotron"]="lmsysorg/sglang:dev-cu13-nemotronh-nano-omni-reasoning-v3|nvidia/nemotron-nano-omni|bfloat16|false|||"
 
 # 4. Mistral (Specialized Kernels)
-MODEL_PARAMS["mistral"]="lmsysorg/sglang:dev-cu13-mistral-medium-3.5|mistralai/Mistral-Medium-3.5|bf16|false|||"
+MODEL_PARAMS["mistral"]="lmsysorg/sglang:dev-cu13-mistral-medium-3.5|mistralai/Mistral-Medium-3.5|bfloat16|false|||"
 
 # 5. DeepSeek (Blackwell Optimized)
-MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4|bf16|false|||"
+MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4|bfloat16|false|||"
 
 # --- API FUNCTIONS ---
 
