@@ -188,12 +188,21 @@ download_model() {
     [ -z "$REPO_ID" ] && error "Usage: --download <repo>"
     local PY_EXEC=$(get_python_env)
     log "Downloading $REPO_ID using $PY_EXEC..."
-    $PY_EXEC -m pip install -q huggingface_hub
+    
+    # Try to ensure huggingface_hub is present in the selected env
+    $PY_EXEC -m pip install -q huggingface_hub || true
+    
     mkdir -p "$MODELS_DIR/$REPO_ID"
     $PY_EXEC -c "
 from huggingface_hub import snapshot_download
-snapshot_download(repo_id='$REPO_ID', local_dir='$MODELS_DIR/$REPO_ID', local_dir_use_symlinks=False)
-" && success "Download complete!" || error "Download failed"
+import os
+try:
+    snapshot_download(repo_id='$REPO_ID', local_dir='$MODELS_DIR/$REPO_ID', local_dir_use_symlinks=False)
+    print('SUCCESS')
+except Exception as e:
+    print(f'ERROR: {e}')
+    exit(1)
+" | grep -q "SUCCESS" && success "Download complete!" || error "Download failed. Ensure $PY_EXEC has huggingface_hub installed."
 }
 
 case "${1:-}" in
