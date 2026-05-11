@@ -1,13 +1,21 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator - Main Router (orchestrator.sh)
+# SGLang Modular Orchestrator v10.1 (Fixed Environment)
 # =============================================================================
 
 set -uo pipefail
 
 # --- CONFIGURATION & PATHS ---
+# Define core paths FIRST. Modules depend on these being set.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
+
+# Environment variables for modules
+export SGLANG_REPO="$PROJECT_ROOT/sglang_repo"
+export SGLANG_VENV="$PROJECT_ROOT/sglang_venv"
+export VENV_PYTHON="$SGLANG_VENV/bin/python"
+export MODELS_DIR="$PROJECT_ROOT/models"
+export LOG_DIR="$PROJECT_ROOT/logs"
 
 # Load Modules
 MODULE_DIR="$SCRIPT_DIR/modules"
@@ -15,18 +23,11 @@ source "$MODULE_DIR/lib_docker.sh"
 source "$MODULE_DIR/lib_venv.sh"
 source "$MODULE_DIR/lib_api.sh"
 
-# Constants
-SGLANG_REPO="$PROJECT_ROOT/sglang_repo"
-SGLANG_VENV="$PROJECT_ROOT/sglang_venv"
-VENV_PYTHON="$SGLANG_VENV/bin/python"
-MODELS_DIR="$PROJECT_ROOT/models"
-LOG_DIR="$PROJECT_ROOT/logs"
-
 # --- UTILITIES ---
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Modular Orchestrator v10.0"
+    echo " SGLang Modular Orchestrator v10.1"
     echo "============================================================"
     echo " Workspace: $PROJECT_ROOT"
     echo "------------------------------------------------------------"
@@ -151,7 +152,7 @@ menu_ops() {
 
 while true; do
     print_header
-    echo "=== [🚀] SGLang Modular Orchestrator v10.0 ==="
+    echo "=== [🚀] SGLang Modular Orchestrator v10.1 ==="
     echo "------------------------------------------------------------"
     echo "1) 🐳 [DOCKER] - Specialized High-Perf Containers"
     echo "2) 🐍 [VENV]   - Local Development Environment"
