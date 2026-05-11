@@ -47,7 +47,12 @@ except: print('')
 }
 
 scan_models_internal() {
-    "$VENV_PYTHON" << EOF 2>/dev/null
+    local PY_EXEC=$(get_python_env)
+    
+    # Use a temporary file to store the python output to avoid bash pipe issues
+    local TMP_FILE=$(mktemp)
+    
+    "$PY_EXEC" << EOF 2>/dev/null > "$TMP_FILE"
 import json, os
 models_dir = "$MODELS_DIR"
 models = []
@@ -62,18 +67,35 @@ for root, _, files in os.walk(models_dir):
 for i, (path, arch) in enumerate(models, 1):
     print(f"{i}|{path}|{arch}")
 EOF
-    | while IFS='|' read -r id path arch; do
-        printf "%-4s | %-60s | %-20s\n" "$id" "${path: -60}" "$arch"
-    done
+
+    echo "------------------------------------------------------------"
+    printf "%-4s | %-60s | %-20s\n" "ID" "MODEL PATH" "ARCH"
+    echo "------------------------------------------------------------"
+    
+    # Read the temp file line by line
+    while IFS='|' read -r id path arch; do
+        if [ -n "$id" ]; then
+            printf "%-4s | %-60s | %-20s\n" "$id" "${path: -60}" "$arch"
+        fi
+    done < "$TMP_FILE"
+    echo "------------------------------------------------------------"
+    
+    rm -f "$TMP_FILE"
 }
 
 select_and_launch() {
-    log "Using venv: $VENV_PYTHON"
+    local PY_EXEC=$(get_python_env)
+    log "Using Python: $PY_EXEC"
 
-    mapfile -t MODEL_ENTRIES < <(scan_models_internal)
+    # Capture the output of scan_models_internal into an array
+    mapfile -t MODEL_ENTRIES < <(scan_models_internal | grep "|")
 
-    [ ${#MODEL_ENTRIES[@]} -eq 0 ] && error "No models found!"
+    if [ ${#MODEL_ENTRIES[@]} -eq 0 ]; then
+        error "No models found!"
+        return 1
+    fi
 
+    # Re-print header for selection context
     echo "------------------------------------------------------------"
     printf "%-4s | %-60s | %-20s\n" "ID" "MODEL PATH" "ARCH"
     echo "------------------------------------------------------------"
@@ -91,6 +113,12 @@ select_and_launch() {
     SELECTED_LINE="${MODEL_ENTRIES[$((choice-1))]}"
     MODEL_PATH=$(echo "$SELECTED_LINE" | cut -d'|' -f2)
 
+    IFS='|' read -r REASONING TOOLCALL EXTRA_FLAGS <<< "$(detect_model_flags "$MODEL_PATH")"
+
+    read -p "Port [30001]: " PORT; PORT=${PORT:-30001}
+    read -p "Memory fraction [0.80]: " MEM; MEM=${MEM:-0.80}
+    read -p "TP size [1]: " TP; TP=${TP:-1}
+
     # --- AUTO-DOWNLOAD LOGIC ---
     if [ ! -d "$MODEL_PATH" ] || [ ! -f "$MODEL_PATH/config.json" ]; then
         echo -e "${YELLOW}⚠️  Model path not found or incomplete: $MODEL_PATH${NC}"
@@ -100,23 +128,16 @@ select_and_launch() {
             [ -z "$hf_repo" ] && { error "No Repo ID provided."; return 1; }
             bash "$SCRIPT_DIR/intelligence.sh" --download "$hf_repo"
             MODEL_PATH=$(find "$MODELS_DIR/$hf_repo" -name "config.json" -exec dirname {} \; | head -n 1)
-            [ -z "$MODEL_PATH" ] && { error "Download failed to locate config.json."; return 1; }
+            [ -z "$MODEL_PATH" ] && { error "Download failed to locate config.json"; return 1; }
             echo -e "${GREEN}✅ Model located at: $MODEL_PATH${NC}"
         else
             error "Model path required for launch."
             return 1
         fi
     fi
+    # --------------------------------
 
-    IFS='|' read -r REASONING TOOLCALL EXTRA_FLAGS <<< "$(detect_model_flags "$MODEL_PATH")"
-
-    read -p "Port [30001]: " PORT; PORT=${PORT:-30001}
-    read -p "Memory fraction [0.80]: " MEM; MEM=${MEM:-0.80}
-    read -p "TP size [1]: " TP; TP=${TP:-1}
-
-    # --- BUILD COMMAND ---
-    CMD="CUDA_HOME=/usr/local/cuda \
-    $VENV_PYTHON -m sglang.launch_server \
+    CMD="$PY_EXEC -m sglang.launch_server \
     --model-path \"$MODEL_PATH\" \
     --mem-fraction-static $MEM \
     --host 0.0.0.0 \
@@ -131,20 +152,12 @@ select_and_launch() {
     [ -n "$REASONING" ] && CMD+=" --reasoning-parser $REASONING"
     [ -n "$TOOLCALL" ] && CMD+=" --tool-call-parser $TOOLCALL"
 
-    # --- RUNTIME PARAMETER REVIEW ---
     echo "------------------------------------------------------------"
-    echo "📋 RUNTIME PARAMETERS REVIEW"
-    echo "------------------------------------------------------------"
-    echo "  Model Path:    $MODEL_PATH"
-    echo "  Port:          $PORT"
-    echo "  Memory Frac:   $MEM"
-    echo "  TP Size:       $TP"
-    echo "  Reasoning:     ${REASONING:-None}"
-    echo "  Tool Call:     ${TOOLCALL:-None}"
-    echo "  Extra Flags:   $EXTRA_FLAGS"
+    echo "🚀 LAUNCH COMMAND:"
+    echo "$CMD"
     echo "------------------------------------------------------------"
     
-    read -p "Proceed with launch? (Y/n): " confirm
+    read -p "Launch? (Y/n): " confirm
     [[ "$confirm" =~ ^[nN]$ ]] && { log "Cancelled."; return 0; }
     
     mkdir -p "$LOG_DIR"
@@ -163,14 +176,12 @@ select_and_launch() {
 download_model() {
     local REPO_ID=$1
     [ -z "$REPO_ID" ] && error "Usage: --download <repo>"
-    log "Downloading $REPO_ID..."
-    if ! "$VENV_PYTHON" -c "import huggingface_hub" &> /dev/null; then
-        "$VENV_PYTHON" -m pip install huggingface_hub
-    fi
+    local PY_EXEC=$(get_python_env)
+    log "Downloading $REPO_ID using $PY_EXEC..."
+    $PY_EXEC -m pip install -q huggingface_hub
     mkdir -p "$MODELS_DIR/$REPO_ID"
-    "$VENV_PYTHON" -c "
+    $PY_EXEC -c "
 from huggingface_hub import snapshot_download
 snapshot_download(repo_id='$REPO_ID', local_dir='$MODELS_DIR/$REPO_ID', local_dir_use_symlinks=False)
-print('SUCCESS')
 " && success "Download complete!" || error "Download failed"
 }
