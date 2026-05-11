@@ -8,6 +8,10 @@ set -uo pipefail
 # These will be provided by the caller (orchestrator.sh)
 # PROJECT_ROOT, MODELS_DIR, VENV_DIR, VENV_PYTHON, LOG_DIR
 
+# Load Parameters Module
+MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$MODULE_DIR/lib_params.sh"
+
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 log() { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
@@ -48,8 +52,6 @@ except: print('')
 
 scan_models_internal() {
     local PY_EXEC=$(get_python_env)
-    
-    # Use a temporary file to store the python output to avoid bash pipe issues
     local TMP_FILE=$(mktemp)
     
     "$PY_EXEC" << EOF 2>/dev/null > "$TMP_FILE"
@@ -71,8 +73,6 @@ EOF
     echo "------------------------------------------------------------"
     printf "%-4s | %-60s | %-20s\n" "ID" "MODEL PATH" "ARCH"
     echo "------------------------------------------------------------"
-    
-    # Read the temp file line by line
     while IFS='|' read -r id path arch; do
         if [ -n "$id" ]; then
             printf "%-4s | %-60s | %-20s\n" "$id" "${path: -60}" "$arch"
@@ -87,7 +87,6 @@ select_and_launch() {
     local PY_EXEC=$(get_python_env)
     log "Using Python: $PY_EXEC"
 
-    # Capture the output of scan_models_internal into an array
     mapfile -t MODEL_ENTRIES < <(scan_models_internal | grep "|")
 
     if [ ${#MODEL_ENTRIES[@]} -eq 0 ]; then
@@ -95,7 +94,6 @@ select_and_launch() {
         return 1
     fi
 
-    # Re-print header for selection context
     echo "------------------------------------------------------------"
     printf "%-4s | %-60s | %-20s\n" "ID" "MODEL PATH" "ARCH"
     echo "------------------------------------------------------------"
@@ -152,12 +150,20 @@ select_and_launch() {
     [ -n "$REASONING" ] && CMD+=" --reasoning-parser $REASONING"
     [ -n "$TOOLCALL" ] && CMD+=" --tool-call-parser $TOOLCALL"
 
+    # --- RUNTIME PARAMETER REVIEW ---
     echo "------------------------------------------------------------"
-    echo "🚀 LAUNCH COMMAND:"
-    echo "$CMD"
+    echo "📋 RUNTIME PARAMETERS REVIEW (VENV)"
+    echo "------------------------------------------------------------"
+    echo "  Model Path:    $MODEL_PATH"
+    echo "  Port:          $PORT"
+    echo "  Memory Frac:   $MEM"
+    echo "  TP Size:       $TP"
+    echo "  Reasoning:     ${REASONING:-None}"
+    echo "  Tool Call:     ${TOOLCALL:-None}"
+    echo "  Extra Flags:   $EXTRA_FLAGS"
     echo "------------------------------------------------------------"
     
-    read -p "Launch? (Y/n): " confirm
+    read -p "Proceed with launch? (Y/n): " confirm
     [[ "$confirm" =~ ^[nN]$ ]] && { log "Cancelled."; return 0; }
     
     mkdir -p "$LOG_DIR"

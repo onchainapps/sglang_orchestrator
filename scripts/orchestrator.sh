@@ -1,12 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Modular Orchestrator v10.1 (Fixed Environment)
+# SGLang Modular Orchestrator v10.2 (Refactored)
 # =============================================================================
 
 set -uo pipefail
 
 # --- CONFIGURATION & PATHS ---
-# Define core paths FIRST. Modules depend on these being set.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
 
@@ -19,6 +18,7 @@ export LOG_DIR="$PROJECT_ROOT/logs"
 
 # Load Modules
 MODULE_DIR="$SCRIPT_DIR/modules"
+source "$MODULE_DIR/lib_params.sh"
 source "$MODULE_DIR/lib_docker.sh"
 source "$MODULE_DIR/lib_venv.sh"
 source "$MODULE_DIR/lib_api.sh"
@@ -27,7 +27,7 @@ source "$MODULE_DIR/lib_api.sh"
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Modular Orchestrator v10.1"
+    echo " SGLang Modular Orchestrator v10.2"
     echo "============================================================"
     echo " Workspace: $PROJECT_ROOT"
     echo "------------------------------------------------------------"
@@ -55,7 +55,7 @@ menu_docker() {
             1)
                 echo "Available Docker Profiles:"
                 i=1
-                mapfile -t keys < <(for k in "${!DOCKER_PROFILES[@]}"; do echo "$k"; done)
+                mapfile -t keys < <(get_all_profiles)
                 for k in "${keys[@]}"; do echo "$i) $k"; ((i++)); done
                 read -p "Select Profile #: " p_idx
                 if [[ "$p_idx" =~ ^[0-9]+$ ]] && [ "$p_idx" -le "${#keys[@]}" ]; then
@@ -152,7 +152,7 @@ menu_ops() {
 
 while true; do
     print_header
-    echo "=== [🚀] SGLang Modular Orchestrator v10.1 ==="
+    echo "=== [🚀] SGLang Modular Orchestrator v10.2 ==="
     echo "------------------------------------------------------------"
     echo "1) 🐳 [DOCKER] - Specialized High-Perf Containers"
     echo "2) 🐍 [VENV]   - Local Development Environment"
