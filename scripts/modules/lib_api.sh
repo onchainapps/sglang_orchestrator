@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator - API Module (lib_api.sh)
+# SGLang Orchestrator - API Module (lib_api.sh) v2.0 (FIXED)
 # =============================================================================
 
 set -uo pipefail
@@ -16,13 +16,11 @@ expose_api() {
     local port=${1:-30001}
     log "Starting API Exposure on port $port..."
     
-    # This mimics the functionality of expose-api.sh
-    # Assuming it uses a simple python/fastapi or similar tool to bridge/proxy
-    # For now, we'll look for the existing script if it exists
     local expose_script="$PROJECT_ROOT/expose-api.sh"
     
     if [ -f "$expose_script" ]; then
-        bash "$expose_script" --port "$port"
+        # FIXED: Use correct flags for expose-api.sh
+        bash "$expose_script" --proxy --api-port "$port"
     else
         error "expose-api.sh not found at $expose_script"
         return 1

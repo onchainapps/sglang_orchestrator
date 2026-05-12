@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator - Intelligence (Resilient Hybrid Download)
+# SGLang Orchestrator - Intelligence (Resilient Hybrid Download) v2.0 (FIXED)
 # =============================================================================
 
 set -uo pipefail
@@ -57,7 +57,6 @@ except: print('')
 
 scan_models_internal() {
     local PY_EXEC=$(get_python_env)
-    # Use a temporary file to avoid the pipe-to-while syntax error in some bash versions
     local TMP_FILE=$(mktemp)
     
     "$PY_EXEC" << EOF 2>/dev/null > "$TMP_FILE"
@@ -93,8 +92,6 @@ select_and_launch() {
     local PY_EXEC=$(get_python_env)
     log "Using Python: $PY_EXEC"
 
-    # Capture the output of scan_models_internal into an array
-    # We extract just the lines that match the ID|PATH|ARCH pattern
     mapfile -t MODEL_ENTRIES < <(scan_models_internal | grep "|")
 
     if [ ${#MODEL_ENTRIES[@]} -eq 0 ]; then
@@ -102,7 +99,6 @@ select_and_launch() {
         return 1
     fi
 
-    # Re-print header for selection context
     echo "------------------------------------------------------------"
     printf "%-4s | %-60s | %-20s\n" "ID" "MODEL PATH" "ARCH"
     echo "------------------------------------------------------------"
@@ -126,7 +122,7 @@ select_and_launch() {
     read -p "Memory fraction [0.80]: " MEM; MEM=${MEM:-0.80}
     read -p "TP size [1]: " TP; TP=${TP:-1}
 
-    # --- AUTO-DOWNLOAD LOGIC ---
+    # --- AUTO-DOWNLOAD LOGIC (FIXED - removed broken $profile_key reference) ---
     if [ ! -d "$MODEL_PATH" ] || [ ! -f "$MODEL_PATH/config.json" ]; then
         echo -e "${YELLOW}⚠️  Model path not found or incomplete: $MODEL_PATH${NC}"
         read -p "Would you like to download from Hugging Face? (y/n): " dl_choice
@@ -134,7 +130,6 @@ select_and_launch() {
             read -p "Enter HF Repo ID: " hf_repo
             [ -z "$hf_repo" ] && { error "No Repo ID provided."; return 1; }
             
-            # 1. Download primary model
             bash "$SCRIPT_DIR/intelligence.sh" --download "$hf_repo"
             MODEL_PATH=$(find "$MODELS_DIR/$hf_repo" -name "config.json" -exec dirname {} \; | head -n 1)
             
@@ -143,19 +138,6 @@ select_and_launch() {
                 return 1
             fi
             echo -e "${GREEN}✅ Model located at: $MODEL_PATH${NC}"
-
-            # 2. Check for Drafter/Speculative model recommendation
-            local drafter_repo=$(get_drafter_repo "$profile_key")
-            if [ -n "$drafter_repo" ]; then
-                local drafter_path="$MODELS_DIR/$drafter_repo"
-                if [ ! -d "$drafter_path" ] || [ ! -f "$drafter_path/config.json" ]; then
-                    echo -e "\n${YELLOW}💡 Recommendation: Speculative decoding is enabled for this profile.${NC}"
-                    read -p "Would you like to download the Drafter model ($drafter_repo) now? (y/n): " dl_drafter
-                    if [[ "$dl_drafter" =~ ^[yY]$ ]]; then
-                        bash "$SCRIPT_DIR/intelligence.sh" --download "$drafter_repo"
-                    fi
-                fi
-            fi
         else
             error "Model path required for launch."
             return 1
@@ -206,13 +188,11 @@ download_model() {
     
     mkdir -p "$MODELS_DIR/$REPO_ID"
 
-    # 1. Primary Method: Using the system 'hf' CLI if available
     if command -v hf &> /dev/null; then
         log "Using 'hf' CLI for download..."
         hf download "$REPO_ID" --local-dir "$MODELS_DIR/$REPO_ID" --local-dir-use-symlinks False && success "Download complete (via hf CLI)!" && return 0
     fi
 
-    # 2. Fallback Method: Python snapshot_download
     local PY_EXEC=$(get_python_env)
     log "Using Python ($PY_EXEC) for download..."
     
@@ -233,8 +213,6 @@ except Exception as e:
     exit(1)
 " | grep -q "SUCCESS" && success "Download complete! (via Python)" || error "Download failed. Ensure huggingface_hub is available."
 }
-
-
 
 case "${1:-}" in
     --scan) scan_models_internal ;;

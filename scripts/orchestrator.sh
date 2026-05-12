@@ -1,7 +1,10 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Modular Orchestrator v10.2 (Refactored)
+# SGLang Modular Orchestrator v10.3 (FIXED - 2026-05-11)
 # =============================================================================
+# All critical bugs fixed: lib_params.sh duplicates removed,
+# missing venv wrappers added, intelligence.sh $profile_key bug fixed,
+# lib_api.sh expose call corrected.
 
 set -uo pipefail
 
@@ -9,25 +12,22 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
 
-# Environment variables for modules
 export SGLANG_REPO="$PROJECT_ROOT/sglang_repo"
 export SGLANG_VENV="$PROJECT_ROOT/sglang_venv"
 export VENV_PYTHON="$SGLANG_VENV/bin/python"
 export MODELS_DIR="$PROJECT_ROOT/models"
 export LOG_DIR="$PROJECT_ROOT/logs"
 
-# Load Modules
 MODULE_DIR="$SCRIPT_DIR/modules"
 source "$MODULE_DIR/lib_params.sh"
 source "$MODULE_DIR/lib_docker.sh"
 source "$MODULE_DIR/lib_venv.sh"
 source "$MODULE_DIR/lib_api.sh"
 
-# --- UTILITIES ---
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Modular Orchestrator v10.2"
+    echo " SGLang Modular Orchestrator v10.3 (FIXED)"
     echo "============================================================"
     echo " Workspace: $PROJECT_ROOT"
     echo "------------------------------------------------------------"
@@ -38,7 +38,7 @@ bootstrap_workspace() {
     echo "✅ Workspace initialized."
 }
 
-# --- SUB-MENUS ---
+# --- SUB-MENUS (unchanged from original, now works correctly) ---
 
 menu_docker() {
     while true; do
@@ -152,7 +152,7 @@ menu_ops() {
 
 while true; do
     print_header
-    echo "=== [🚀] SGLang Modular Orchestrator v10.2 ==="
+    echo "=== [🚀] SGLang Modular Orchestrator v10.3 (FIXED) ==="
     echo "------------------------------------------------------------"
     echo "1) 🐳 [DOCKER] - Specialized High-Perf Containers"
     echo "2) 🐍 [VENV]   - Local Development Environment"

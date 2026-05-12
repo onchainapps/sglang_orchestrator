@@ -1,12 +1,12 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator - VENV Module (lib_venv.sh)
+# SGLang Orchestrator - VENV Module (lib_venv.sh) v2.0 (FIXED)
 # =============================================================================
 
 set -uo pipefail
 
 # These will be provided by the caller (orchestrator.sh)
-# PROJECT_ROOT, MODELS_DIR, VENV_DIR, VENV_PYTHON, LOG_DIR
+# PROJECT_ROOT, MODELS_DIR, VENV_DIR, VENV_PYTHON, LOG_DIR, SCRIPT_DIR
 
 # Load Parameters Module
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,9 +17,13 @@ log() { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; return 1; }
 
-if [ ! -f "$VENV_PYTHON" ]; then
-    error "Venv not found! Run option 6 first."
-fi
+get_python_env() {
+    if [ -f "$VENV_PYTHON" ]; then
+        echo "$VENV_PYTHON"
+    else
+        echo "python3"
+    fi
+}
 
 detect_model_flags() {
     local MODEL_PATH="$1"
@@ -83,7 +87,13 @@ EOF
     rm -f "$TMP_FILE"
 }
 
-select_and_launch() {
+# --- PUBLIC API (called by orchestrator.sh) ---
+
+venv_scan_models() {
+    scan_models_internal
+}
+
+venv_launch_model() {
     local PY_EXEC=$(get_python_env)
     log "Using Python: $PY_EXEC"
 
@@ -117,7 +127,7 @@ select_and_launch() {
     read -p "Memory fraction [0.80]: " MEM; MEM=${MEM:-0.80}
     read -p "TP size [1]: " TP; TP=${TP:-1}
 
-    # --- AUTO-DOWNLOAD LOGIC ---
+    # Auto-download if model missing
     if [ ! -d "$MODEL_PATH" ] || [ ! -f "$MODEL_PATH/config.json" ]; then
         echo -e "${YELLOW}⚠️  Model path not found or incomplete: $MODEL_PATH${NC}"
         read -p "Would you like to download from Hugging Face? (y/n): " dl_choice
@@ -133,7 +143,6 @@ select_and_launch() {
             return 1
         fi
     fi
-    # --------------------------------
 
     CMD="$PY_EXEC -m sglang.launch_server \
     --model-path \"$MODEL_PATH\" \
@@ -150,7 +159,6 @@ select_and_launch() {
     [ -n "$REASONING" ] && CMD+=" --reasoning-parser $REASONING"
     [ -n "$TOOLCALL" ] && CMD+=" --tool-call-parser $TOOLCALL"
 
-    # --- RUNTIME PARAMETER REVIEW ---
     echo "------------------------------------------------------------"
     echo "📋 RUNTIME PARAMETERS REVIEW (VENV)"
     echo "------------------------------------------------------------"
