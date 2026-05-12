@@ -115,6 +115,20 @@ docker_launch_model() {
     read -p "Proceed with launch? (Y/n): " confirm
     [[ "$confirm" =~ ^[nN]$ ]] && { echo "Cancelled."; return 0; }
 
+    echo ""
+    echo "=== FULL DOCKER COMMAND ==="
+    echo "docker run --gpus all --shm-size 32g -p 30001:30001 -v $MODELS_DIR:/models --name sglang-$profile_key -d $docker_img \\"
+    echo "  python -m sglang.launch_server \\"
+    echo "    --model-path $container_model_path \\"
+    echo "    --host 0.0.0.0 \\"
+    echo "    --port 30001 \\"
+    echo "    --dtype $precision \\"
+    echo "    --mem-fraction-static $mem_fraction \\"
+    echo "    --max-total-tokens $max_tokens \\"
+    echo "    $final_flags"
+    echo "============================"
+    echo ""
+
     echo "Executing: docker run ..."
     docker stop "sglang-$profile_key" 2>/dev/null || true
     docker rm "sglang-$profile_key" 2>/dev/null || true
