@@ -6,9 +6,9 @@
 declare -A MODEL_PARAMS
 
 # Format: IMAGE|HF_REPO|DEFAULT_TP|ENV_VARS|DOCKER_FLAGS
-MODEL_PARAMS["gemma-4-26b-a4b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-26B-A4B-it|2||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 5 --speculative-num-draft-tokens 6 --speculative-eagle-topk 1 --mem-fraction-static 0.85"
+MODEL_PARAMS["gemma-4-26b-a4b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-26B-A4B-it|2||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 5 --speculative-num-draft-tokens 6 --speculative-eagle-topk 1"
 
-MODEL_PARAMS["gemma-4-31b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-31B-it|2||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 5 --speculative-num-draft-tokens 6 --speculative-eagle-topk 1 --mem-fraction-static 0.85"
+MODEL_PARAMS["gemma-4-31b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-31B-it|2||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 5 --speculative-num-draft-tokens 6 --speculative-eagle-topk 1"
 
 MODEL_PARAMS["qwen-27b-fp8"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-27B-FP8|1|SGLANG_ENABLE_SPEC_V2=1|--reasoning-parser qwen3 --tool-call-parser qwen3_coder --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-num-draft-tokens 4 --speculative-eagle-topk 1 --mamba-scheduler-strategy extra_buffer --mem-fraction-static 0.82"
 
