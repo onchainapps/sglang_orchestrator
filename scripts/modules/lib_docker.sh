@@ -81,9 +81,24 @@ docker_launch_model() {
         fi
     fi
 
-    # 5. Prepare Launch Command
+    # 5. Prepare Launch Command (clean flag building)
     local mem_fraction="0.75"
     local max_tokens="131072"
+
+    # Base flags (common + memory management)
+    local base_flags="--reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
+
+    # Model-specific overrides
+    if [[ "$profile_key" == "gemma4" ]]; then
+        base_flags="--reasoning-parser gemma4 --tool-call-parser gemma4 --allow-auto-truncate --context-length 262111 --hf-chat-template-name gemma --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
+    elif [[ "$profile_key" == "deepseek" ]]; then
+        base_flags="--reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --allow-auto-truncate --context-length 262111 --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 4096 --moe-runner-backend flashinfer_mxfp4 --trust-remote-code"
+    elif [[ "$profile_key" == "qwen3.6-35b" || "$profile_key" == "qwen3.6-27b" ]]; then
+        base_flags="--mamba-scheduler-strategy extra_buffer --page-size 64 --reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
+    fi
+
+    # Combine everything
+    local final_flags="$base_flags $mtp_args"
 
     echo "------------------------------------------------------------"
     echo "📋 RUNTIME PARAMETERS REVIEW (DOCKER)"
@@ -95,8 +110,7 @@ docker_launch_model() {
     echo "  Port:          30001"
     echo "  Memory Frac:   $mem_fraction"
     echo "  MTP Mode:      $use_mtp"
-    echo "  Special Args:  $spec_args"
-    echo "  MTP Args:      $mtp_args"
+    echo "  Final Flags:   $final_flags"
     echo "------------------------------------------------------------"
     
     read -p "Proceed with launch? (Y/n): " confirm
@@ -121,9 +135,7 @@ docker_launch_model() {
             --dtype "$precision" \
             --mem-fraction-static "$mem_fraction" \
             --max-total-tokens "$max_tokens" \
-            $spec_args \
-            $mtp_args \
-            --trust-remote-code
+            $final_flags
 
     if [ $? -eq 0 ]; then
         echo "✅ Container 'sglang-$profile_key' is running."
