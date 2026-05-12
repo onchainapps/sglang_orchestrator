@@ -45,10 +45,10 @@ get_drafter_repo() {
 get_profile_description() {
     local key=$1
     case $key in
-        gemma4)          echo "Dense • 27B • Google Gemma 4 (MTP supported)" ;;
-        qwen3.6-35b)     echo "MoE • 35B-A3B • Qwen3.6 Hybrid Mamba+MoE" ;;
-        qwen3.6-27b)     echo "Dense • 27B • Qwen3.6" ;;
-        gemma4-31b)      echo "Dense • 31B • Google Gemma 4 (MTP supported)" ;;
+        gemma4)          echo "MoE • 26B total / 4B active • Google Gemma 4 (MTP)" ;;
+        qwen3.6-35b)     echo "MoE • 35B / 3B active • Qwen3.6 (MTP)" ;;
+        qwen3.6-27b)     echo "Dense • 27B • Qwen3.6 (MTP)" ;;
+        gemma4-31b)      echo "Dense • 31B • Google Gemma 4 (MTP)" ;;
         *)               echo "Unknown profile" ;;
     esac
 }
