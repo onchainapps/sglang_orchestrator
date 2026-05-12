@@ -75,9 +75,9 @@ docker_launch_model() {
             echo "  [MTP] Applying Speculative Decoding with external drafter ($spec_algo)..."
             mtp_args="--speculative-algorithm $spec_algo --speculative-draft-model-path $drafter_path --speculative-num-steps 5 --speculative-num-draft-tokens 6"
         else
-            # Case 2: Built-in MTP (Qwen3.6, DeepSeek) - no external drafter needed
-            echo "  [MTP] Applying built-in Speculative Decoding (NEXTN)..."
-            mtp_args="--speculative-algorithm NEXTN --speculative-num-steps 3 --speculative-num-draft-tokens 4"
+            # Case 2: Built-in MTP (Qwen3.6, DeepSeek) - use EAGLE (more stable)
+            echo "  [MTP] Applying built-in Speculative Decoding (EAGLE)..."
+            mtp_args="--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4"
         fi
     fi
 
