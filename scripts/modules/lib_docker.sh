@@ -1,10 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh - Docker Launch (CLEAN v11.2)
-# =============================================================================
-# Fixed: TP parsing bug
-# Fixed: Duplicate flags
-# Fixed: Clean command building
+# lib_docker.sh v11.3 - Clean command builder (no duplicates)
 # =============================================================================
 
 set -uo pipefail
@@ -15,21 +11,23 @@ docker_launch_model() {
     local mem_frac="${3:-0.82}"
     local tp="${4:-2}"
 
-    local data
-    data=$(get_profile_data "$profile")
-    IFS='|' read -r image hf_repo precision mtp_cap default_tp drafter algo flags <<< "$data"
-
+    local env_vars
+    env_vars=$(get_env_vars "$profile")
+    local docker_flags
+    docker_flags=$(get_docker_flags "$profile")
     local model_name
-    model_name=$(basename "$hf_repo")
+    model_name=$(basename "$(get_profile_data "$profile" | cut -d'|' -f2)")
 
-    echo "🚀 Launching $profile (TP=$tp, mem=$mem_frac)"
+    echo "🚀 Launching $profile (TP=$tp)"
 
-    # Build base command
+    local env_prefix=""
+    [ -n "$env_vars" ] && env_prefix="$env_vars "
+
     local cmd=(
         docker run --gpus all --rm -it
         -v "$MODELS_DIR:/models"
         -p 30000:30000
-        "$image"
+        lmsysorg/sglang:latest
         --model-path "/models/$model_name"
         --tp "$tp"
         --mem-fraction-static "$mem_frac"
@@ -37,26 +35,17 @@ docker_launch_model() {
         --port 30000
     )
 
-    # Add all verified flags from lib_params.sh (split properly)
-    if [ -n "$flags" ]; then
-        # Split flags string into array (handles spaces correctly)
-        read -ra flag_array <<< "$flags"
-        cmd+=("${flag_array[@]}")
+    if [ -n "$docker_flags" ]; then
+        read -ra f <<< "$docker_flags"
+        cmd+=("${f[@]}")
     fi
 
-    # Add speculative if MTP enabled
-    if [ "$mtp" == "true" ] && [ -n "$algo" ]; then
-        cmd+=(--speculative-algorithm "$algo")
+    if [ "$mtp" == "true" ]; then
+        cmd+=(--speculative-algorithm "EAGLE")
     fi
 
     echo ""
-    echo "Final command:"
-    echo "${cmd[*]}"
+    echo "Command: ${cmd[*]}"
     echo ""
-
     "${cmd[@]}"
-}
-
-docker_show_status() {
-    docker ps --filter "ancestor=lmsysorg/sglang" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
