@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.5 - With selectable port
+# lib_docker.sh v12.6 - FP8 support for Gemma
 # =============================================================================
 
 docker_launch_model() {
@@ -10,6 +10,7 @@ docker_launch_model() {
     local tp="${4:-2}"
     local ctx_len="${5:-262144}"
     local port="${6:-30001}"
+    local use_fp8="${7:-false}"
 
     local env_vars
     env_vars=$(get_env_vars "$profile")
@@ -18,7 +19,7 @@ docker_launch_model() {
     local hf_repo
     hf_repo=$(get_profile_data "$profile" | cut -d'|' -f2)
 
-    echo "🚀 Launching $profile (TP=$tp, mem=$mem_frac, ctx=$ctx_len, port=$port, speculative=$mtp)"
+    echo "🚀 Launching $profile (TP=$tp, mem=$mem_frac, ctx=$ctx_len, port=$port, speculative=$mtp, fp8=$use_fp8)"
 
     local full_cmd="docker run --gpus all --rm -it -v $MODELS_DIR:/models -p $port:$port"
 
@@ -27,6 +28,11 @@ docker_launch_model() {
     fi
 
     full_cmd="$full_cmd lmsysorg/sglang:latest sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port $port"
+
+    # Add FP8 if requested
+    if [ "$use_fp8" == "true" ]; then
+        full_cmd="$full_cmd --quantization fp8"
+    fi
 
     if [ "$mtp" == "true" ]; then
         full_cmd="$full_cmd $base_flags"

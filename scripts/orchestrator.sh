@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator v12.5 - User-selectable Port
+# SGLang Orchestrator v12.6 - Force FP8 for Gemma
 # =============================================================================
 
 set -uo pipefail
@@ -16,7 +16,7 @@ source "$MODULE_DIR/lib_docker.sh"
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Orchestrator v12.5 (with selectable port)"
+    echo " SGLang Orchestrator v12.6 (FP8 for Gemma)"
     echo "============================================================"
 }
 
@@ -57,10 +57,19 @@ menu_docker() {
                 read -p "Port [30001]: " port
                 port=${port:-30001}
 
+                # FP8 option for Gemma models
+                use_fp8="false"
+                if [[ "$sel" == gemma* ]]; then
+                    read -p "Use FP8 quantization for Gemma? (y/n): " fp8_in
+                    if [[ "$fp8_in" == "y" ]]; then
+                        use_fp8="true"
+                    fi
+                fi
+
                 read -p "Enable Speculative? (y/n): " mtp_in
                 mtp=$([[ "$mtp_in" == "y" ]] && echo "true" || echo "false")
 
-                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port"
+                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$use_fp8"
                 read -p "Press enter..."
                 ;;
             2) docker_show_status; read -p "Press enter..." ;;
