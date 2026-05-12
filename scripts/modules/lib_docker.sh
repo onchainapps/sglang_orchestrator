@@ -55,9 +55,6 @@ docker_launch_model() {
     # 4. Handle Speculative Decoding (MTP) logic - supports both external drafter and built-in MTP
     local mtp_args=""
     if [[ "$use_mtp" == "true" && "$mtp_cap" == "true" ]]; then
-        local spec_algo
-        spec_algo=$(get_spec_algo "$profile_key")
-
         if [ -n "$drafter_repo" ]; then
             # Case 1: External drafter (e.g. Gemma 4)
             local drafter_path="$MODELS_DIR/$drafter_repo"
