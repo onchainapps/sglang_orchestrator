@@ -104,13 +104,16 @@ docker_launch_model() {
     docker stop "sglang-$profile_key" 2>/dev/null || true
     docker rm "sglang-$profile_key" 2>/dev/null || true
 
+    # Use container-internal path (because of -v "$MODELS_DIR:/models")
+    local container_model_path="/models/$hf_id"
+
     docker run --gpus all --shm-size 32g -p 30001:30001 \
         -v "$MODELS_DIR:/models" \
         --name "sglang-$profile_key" \
         -d \
         "$docker_img" \
         python -m sglang.launch_server \
-            --model-path "$target_model_path" \
+            --model-path "$container_model_path" \
             --host 0.0.0.0 \
             --port 30001 \
             --dtype "$precision" \
