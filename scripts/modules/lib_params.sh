@@ -31,7 +31,7 @@ MODEL_PARAMS["nemotron"]="lmsysorg/sglang:dev-cu13-nemotronh-nano-omni-reasoning
 MODEL_PARAMS["mistral"]="lmsysorg/sglang:dev-cu13-mistral-medium-3.5|mistralai/Mistral-Medium-3.5|bfloat16|false|||--reasoning-parser mistral --tool-call-parser mistral --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name mistral --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
 
 # 5. DeepSeek (Blackwell Optimized)
-MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4-Flash|bfloat16|false|||--reasoning-parser deepseek-v3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
+MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4-Flash|bfloat16|true||NEXTN|--reasoning-parser deepseek-v3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
 
 # --- API FUNCTIONS ---
 
