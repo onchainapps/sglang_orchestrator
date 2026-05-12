@@ -30,8 +30,8 @@ MODEL_PARAMS["nemotron"]="lmsysorg/sglang:dev-cu13-nemotronh-nano-omni-reasoning
 MODEL_PARAMS["mistral"]="lmsysorg/sglang:dev-cu13-mistral-medium-3.5|mistralai/Mistral-Medium-3.5|bfloat16|false|||--reasoning-parser mistral --tool-call-parser mistral --allow-auto-truncate --context-length 262111 --hf-chat-template-name mistral --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
 
 # 5. DeepSeek (Blackwell Optimized)
-# Using recommended flags from SGLang DeepSeek-V4 cookbook (tp=1 for single GPU)
-MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4-Flash|bfloat16|false|||--reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --allow-auto-truncate --context-length 262111 --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 4096 --moe-runner-backend flashinfer_mxfp4 --speculative-algo EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --disable-flashinfer-autotune --swa-full-tokens-ratio 0.1 --trust-remote-code"
+# Clean minimal flags from official SGLang DeepSeek-V4 cookbook
+MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4-Flash|bfloat16|false|||--reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --allow-auto-truncate --context-length 262111 --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 4096 --moe-runner-backend flashinfer_mxfp4 --trust-remote-code"
 
 # --- API FUNCTIONS ---
 
