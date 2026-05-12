@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.12 - Correct images + better batching/memory
+# lib_docker.sh v12.13 - Default max-running-requests = 16
 # =============================================================================
 
 docker_show_status() {
@@ -40,7 +40,6 @@ docker_launch_model() {
         fi
     fi
 
-    # Choose correct Docker image per model family
     local image="lmsysorg/sglang:latest"
     if [[ "$profile" == gemma* ]]; then
         image="lmsysorg/sglang:cu13-gemma4"
@@ -49,7 +48,7 @@ docker_launch_model() {
     local container_name="sglang-$(echo $profile | tr '[:upper:]' '[:lower:]' | tr -d '-')"
 
     echo ""
-    echo "🚀 Launching $profile (image: $image, TP=$tp, port=$port)"
+    echo "🚀 Launching $profile in background (TP=$tp, port=$port)"
 
     local full_cmd="docker run -d --name $container_name --gpus all --rm -v $MODELS_DIR:/models -p $port:$port"
 
@@ -57,8 +56,8 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    # Good defaults for multi-user/agent workloads
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port $port --max-running-requests 64 --chunked-prefill-size 8192 --allow-auto-truncate"
+    # Good default for ~5 Hermes agents
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port $port --max-running-requests 16 --chunked-prefill-size 8192 --allow-auto-truncate"
 
     if [ "$use_fp8" == "true" ]; then
         full_cmd="$full_cmd --quantization fp8"
