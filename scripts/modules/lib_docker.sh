@@ -1,10 +1,10 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh - Docker Launch Logic (FIXED v11.1)
+# lib_docker.sh - Docker Launch (CLEAN v11.2)
 # =============================================================================
-# Fixed: spec_algo unbound variable
-# Fixed: Only download drafter for Gemma models (not Qwen)
-# Added: TP support
+# Fixed: TP parsing bug
+# Fixed: Duplicate flags
+# Fixed: Clean command building
 # =============================================================================
 
 set -uo pipefail
@@ -19,44 +19,42 @@ docker_launch_model() {
     data=$(get_profile_data "$profile")
     IFS='|' read -r image hf_repo precision mtp_cap default_tp drafter algo flags <<< "$data"
 
-    local spec_algo="${algo:-EAGLE}"
-    local model_path="$hf_repo"
+    local model_name
+    model_name=$(basename "$hf_repo")
 
-    echo "🚀 Launching $profile with TP=$tp"
+    echo "🚀 Launching $profile (TP=$tp, mem=$mem_frac)"
 
-    # Only handle drafter for Gemma models
-    if [[ "$profile" == gemma* ]]; then
-        local drafter_path
-        drafter_path=$(get_drafter_repo "$profile")
-        if [ -n "$drafter_path" ]; then
-            if [ ! -d "$MODELS_DIR/$(basename "$drafter_path")" ]; then
-                echo "⚠️ Drafter not found: $drafter_path"
-                read -p "Download Drafter model now? (y/n): " dl_drafter
-                if [[ "$dl_drafter" == "y" ]]; then
-                    bash "$SCRIPT_DIR/intelligence.sh" --download "$drafter_path"
-                fi
-            fi
-        fi
-    fi
-
-    # Build docker command with all verified flags + TP
-    local docker_cmd=(
+    # Build base command
+    local cmd=(
         docker run --gpus all --rm -it
         -v "$MODELS_DIR:/models"
         -p 30000:30000
         "$image"
-        --model-path "/models/$(basename "$model_path")"
+        --model-path "/models/$model_name"
         --tp "$tp"
-        $flags
         --mem-fraction-static "$mem_frac"
+        --host 0.0.0.0
+        --port 30000
     )
 
-    if [ "$mtp" == "true" ]; then
-        docker_cmd+=(--speculative-algorithm "$spec_algo")
+    # Add all verified flags from lib_params.sh (split properly)
+    if [ -n "$flags" ]; then
+        # Split flags string into array (handles spaces correctly)
+        read -ra flag_array <<< "$flags"
+        cmd+=("${flag_array[@]}")
     fi
 
-    echo "Running: ${docker_cmd[*]}"
-    "${docker_cmd[@]}"
+    # Add speculative if MTP enabled
+    if [ "$mtp" == "true" ] && [ -n "$algo" ]; then
+        cmd+=(--speculative-algorithm "$algo")
+    fi
+
+    echo ""
+    echo "Final command:"
+    echo "${cmd[*]}"
+    echo ""
+
+    "${cmd[@]}"
 }
 
 docker_show_status() {
