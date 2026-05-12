@@ -82,7 +82,12 @@ docker_launch_model() {
     fi
 
     # 5. Prepare Launch Command (clean flag building)
-    local mem_fraction="0.75"
+    # Lower memory when MTP is enabled (needs extra buffers)
+    if [[ "$use_mtp" == "true" ]]; then
+        local mem_fraction="0.65"
+    else
+        local mem_fraction="0.75"
+    fi
     local max_tokens="131072"
 
     # Base flags (common + memory management)
