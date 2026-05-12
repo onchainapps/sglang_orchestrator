@@ -17,7 +17,7 @@ declare -A MODEL_PARAMS
 
 # 1. Gemma 4 (Full MTP Support)
 # Drafter: google/gemma-4-26B-A4B-it-assistant (current recommended for Gemma 4 MTP)
-MODEL_PARAMS["gemma4"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-27b|bfloat16|true|google/gemma-4-26B-A4B-it-assistant|NEXTN|--reasoning-parser gemma4 --tool-call-parser gemma4 --allow-auto-truncate --context-length 262111 --hf-chat-template-name gemma --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
+MODEL_PARAMS["gemma4"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-26B-A4B-it|bfloat16|true|google/gemma-4-26B-A4B-it-assistant|NEXTN|--reasoning-parser gemma4 --tool-call-parser gemma4 --allow-auto-truncate --context-length 262111 --hf-chat-template-name gemma --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
 
 # 2. Qwen 3.6 Series (Mamba Scheduler Support)
 MODEL_PARAMS["qwen3.6-35b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-A3B|bfloat16|false||--mamba-scheduler-strategy extra_buffer --page-size 64 --reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
