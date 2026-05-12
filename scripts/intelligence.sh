@@ -133,13 +133,29 @@ select_and_launch() {
         if [[ "$dl_choice" =~ ^[yY]$ ]]; then
             read -p "Enter HF Repo ID: " hf_repo
             [ -z "$hf_repo" ] && { error "No Repo ID provided."; return 1; }
+            
+            # 1. Download primary model
             bash "$SCRIPT_DIR/intelligence.sh" --download "$hf_repo"
             MODEL_PATH=$(find "$MODELS_DIR/$hf_repo" -name "config.json" -exec dirname {} \; | head -n 1)
+            
             if [ -z "$MODEL_PATH" ]; then
                 error "Download failed to locate config.json"
                 return 1
             fi
             echo -e "${GREEN}✅ Model located at: $MODEL_PATH${NC}"
+
+            # 2. Check for Drafter/Speculative model recommendation
+            local drafter_repo=$(get_drafter_repo "$profile_key")
+            if [ -n "$drafter_repo" ]; then
+                local drafter_path="$MODELS_DIR/$drafter_repo"
+                if [ ! -d "$drafter_path" ] || [ ! -f "$drafter_path/config.json" ]; then
+                    echo -e "\n${YELLOW}💡 Recommendation: Speculative decoding is enabled for this profile.${NC}"
+                    read -p "Would you like to download the Drafter model ($drafter_repo) now? (y/n): " dl_drafter
+                    if [[ "$dl_drafter" =~ ^[yY]$ ]]; then
+                        bash "$SCRIPT_DIR/intelligence.sh" --download "$drafter_repo"
+                    fi
+                fi
+            fi
         else
             error "Model path required for launch."
             return 1
@@ -186,13 +202,26 @@ select_and_launch() {
 download_model() {
     local REPO_ID=$1
     [ -z "$REPO_ID" ] && error "Usage: --download <repo>"
-    local PY_EXEC=$(get_python_env)
-    log "Downloading $REPO_ID using $PY_EXEC..."
-    
-    # Try to ensure huggingface_hub is present in the selected env
-    $PY_EXEC -m pip install -q huggingface_hub || true
+    log "Downloading $REPO_ID..."
     
     mkdir -p "$MODELS_DIR/$REPO_ID"
+
+    # 1. Primary Method: Using the system 'hf' CLI if available
+    if command -v hf &> /dev/null; then
+        log "Using 'hf' CLI for download..."
+        hf download "$REPO_ID" --local-dir "$MODELS_DIR/$REPO_ID" --local-dir-use-symlinks False && success "Download complete (via hf CLI)!" && return 0
+    fi
+
+    # 2. Fallback Method: Python snapshot_download
+    local PY_EXEC=$(get_python_env)
+    log "Using Python ($PY_EXEC) for download..."
+    
+    if [[ "$PY_EXEC" == "python3" ]]; then
+        $PY_EXEC -m pip install -q huggingface_hub --break-system-packages || true
+    else
+        $PY_EXEC -m pip install -q huggingface_hub || true
+    fi
+    
     $PY_EXEC -c "
 from huggingface_hub import snapshot_download
 import os
@@ -202,8 +231,10 @@ try:
 except Exception as e:
     print(f'ERROR: {e}')
     exit(1)
-" | grep -q "SUCCESS" && success "Download complete!" || error "Download failed. Ensure $PY_EXEC has huggingface_hub installed."
+" | grep -q "SUCCESS" && success "Download complete! (via Python)" || error "Download failed. Ensure huggingface_hub is available."
 }
+
+
 
 case "${1:-}" in
     --scan) scan_models_internal ;;
