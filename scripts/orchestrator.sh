@@ -1,32 +1,29 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Modular Orchestrator v11.2 (FINAL CLEAN)
+# SGLang Orchestrator v12.0 - Official docs + user-selectable params
 # =============================================================================
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
-
 export MODELS_DIR="$PROJECT_ROOT/models"
 
 MODULE_DIR="$SCRIPT_DIR/modules"
 source "$MODULE_DIR/lib_params.sh"
 source "$MODULE_DIR/lib_docker.sh"
-source "$MODULE_DIR/lib_venv.sh"
-source "$MODULE_DIR/lib_api.sh"
 
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Orchestrator v11.2 (FINAL)"
+    echo " SGLang Orchestrator v12.0 (Official Settings)"
     echo "============================================================"
 }
 
 menu_docker() {
     while true; do
         print_header
-        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 FP8"
+        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 FP8 (Official Docs)"
         echo "1) Launch Profile"
         echo "2) Show Status"
         echo "3) Back"
@@ -46,18 +43,21 @@ menu_docker() {
                 read -p "Select Profile #: " p_idx
                 sel="${keys[$((p_idx-1))]}"
 
-                # === ALWAYS ASK FOR TP ===
+                # User-selectable parameters
                 default_tp=$(get_default_tp "$sel")
                 read -p "TP size [default $default_tp]: " user_tp
                 tp=$(get_tp_for_launch "$sel" "$user_tp")
 
-                read -p "Enable MTP/Spec? (y/n): " mtp_in
-                mtp=$([[ "$mtp_in" == "y" ]] && echo "true" || echo "false")
-
                 read -p "Memory fraction [0.82]: " mem_frac
                 mem_frac=${mem_frac:-0.82}
 
-                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp"
+                read -p "Context length [262144]: " ctx_len
+                ctx_len=${ctx_len:-262144}
+
+                read -p "Enable Speculative? (y/n): " mtp_in
+                mtp=$([[ "$mtp_in" == "y" ]] && echo "true" || echo "false")
+
+                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len"
                 read -p "Press enter..."
                 ;;
             2) docker_show_status; read -p "Press enter..." ;;
@@ -66,16 +66,13 @@ menu_docker() {
     done
 }
 
-# Main menu
 while true; do
     print_header
-    echo "1) Docker"
-    echo "2) VENV"
-    echo "3) Exit"
+    echo "1) Docker Launch"
+    echo "2) Exit"
     read -p "Select: " main_opt
     case $main_opt in
         1) menu_docker ;;
-        2) echo "VENV mode coming soon..." ;;
-        3) exit 0 ;;
+        2) exit 0 ;;
     esac
 done
