@@ -54,9 +54,17 @@ menu_docker() {
         case $opt in
             1)
                 echo "Available Docker Profiles:"
+                echo "------------------------------------------------------------"
+                printf "%-3s %-18s %s\n" "#" "PROFILE" "DESCRIPTION"
+                echo "------------------------------------------------------------"
                 i=1
                 mapfile -t keys < <(get_all_profiles)
-                for k in "${keys[@]}"; do echo "$i) $k"; ((i++)); done
+                for k in "${keys[@]}"; do
+                    desc=$(get_profile_description "$k")
+                    printf "%-3s %-18s %s\n" "$i)" "$k" "$desc"
+                    ((i++))
+                done
+                echo "------------------------------------------------------------"
                 read -p "Select Profile #: " p_idx
                 if [[ "$p_idx" =~ ^[0-9]+$ ]] && [ "$p_idx" -le "${#keys[@]}" ]; then
                     sel="${keys[$((p_idx-1))]}"
