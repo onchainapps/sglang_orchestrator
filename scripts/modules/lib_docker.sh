@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.6 - FP8 support for Gemma
+# lib_docker.sh v12.9 - Detached mode (returns to menu immediately)
 # =============================================================================
 
 docker_launch_model() {
@@ -19,9 +19,12 @@ docker_launch_model() {
     local hf_repo
     hf_repo=$(get_profile_data "$profile" | cut -d'|' -f2)
 
-    echo "🚀 Launching $profile (TP=$tp, mem=$mem_frac, ctx=$ctx_len, port=$port, speculative=$mtp, fp8=$use_fp8)"
+    local container_name="sglang-$(echo $profile | tr '[:upper:]' '[:lower:]' | tr -d '-')"
 
-    local full_cmd="docker run --gpus all --rm -it -v $MODELS_DIR:/models -p $port:$port"
+    echo "🚀 Launching $profile in background (TP=$tp, port=$port)"
+    echo "Container name: $container_name"
+
+    local full_cmd="docker run -d --name $container_name --gpus all --rm -v $MODELS_DIR:/models -p $port:$port"
 
     if [ -n "$env_vars" ]; then
         full_cmd="$env_vars $full_cmd"
@@ -29,7 +32,6 @@ docker_launch_model() {
 
     full_cmd="$full_cmd lmsysorg/sglang:latest sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port $port"
 
-    # Add FP8 if requested
     if [ "$use_fp8" == "true" ]; then
         full_cmd="$full_cmd --quantization fp8"
     fi
@@ -45,7 +47,16 @@ docker_launch_model() {
     fi
 
     echo ""
-    echo "Command: $full_cmd"
-    echo ""
+    echo "Starting container..."
     eval "$full_cmd"
+
+    echo ""
+    echo "✅ Container started in background!"
+    echo "   Name: $container_name"
+    echo "   Port: $port"
+    echo ""
+    echo "To view logs:    docker logs -f $container_name"
+    echo "To stop:         docker stop $container_name"
+    echo ""
+    read -p "Press Enter to return to menu..."
 }
