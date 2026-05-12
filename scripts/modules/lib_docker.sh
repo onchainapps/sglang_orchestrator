@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.11 - Final clean version with status function
+# lib_docker.sh v12.12 - Correct images + better batching/memory
 # =============================================================================
 
 docker_show_status() {
@@ -15,7 +15,7 @@ docker_launch_model() {
     local mtp="$2"
     local mem_frac="${3:-0.82}"
     local tp="${4:-2}"
-    local ctx_len="${5:-262144}"
+    local ctx_len="${5:-131072}"
     local port="${6:-30001}"
     local use_fp8="${7:-false}"
 
@@ -28,27 +28,28 @@ docker_launch_model() {
 
     local local_path="$MODELS_DIR/$hf_repo"
 
-    # === AUTO DETECTION ===
     if [ ! -d "$local_path" ]; then
         echo ""
         echo "❌ Model not found locally: $local_path"
-        echo ""
-        read -p "Would you like to download it now? (y/n): " dl
+        read -p "Download it now? (y/n): " dl
         if [[ "$dl" == "y" ]]; then
             bash "$SCRIPT_DIR/intelligence.sh" --download "$hf_repo"
-            echo ""
-            read -p "Press Enter after download finishes to continue..."
+            read -p "Press Enter after download..."
         else
-            echo "Returning to menu..."
             return
         fi
+    fi
+
+    # Choose correct Docker image per model family
+    local image="lmsysorg/sglang:latest"
+    if [[ "$profile" == gemma* ]]; then
+        image="lmsysorg/sglang:cu13-gemma4"
     fi
 
     local container_name="sglang-$(echo $profile | tr '[:upper:]' '[:lower:]' | tr -d '-')"
 
     echo ""
-    echo "🚀 Launching $profile in background (TP=$tp, port=$port)"
-    echo "Container name: $container_name"
+    echo "🚀 Launching $profile (image: $image, TP=$tp, port=$port)"
 
     local full_cmd="docker run -d --name $container_name --gpus all --rm -v $MODELS_DIR:/models -p $port:$port"
 
@@ -56,7 +57,8 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    full_cmd="$full_cmd lmsysorg/sglang:latest sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port $port"
+    # Good defaults for multi-user/agent workloads
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port $port --max-running-requests 64 --chunked-prefill-size 8192 --allow-auto-truncate"
 
     if [ "$use_fp8" == "true" ]; then
         full_cmd="$full_cmd --quantization fp8"
@@ -77,12 +79,9 @@ docker_launch_model() {
     eval "$full_cmd"
 
     echo ""
-    echo "✅ Container started in background!"
-    echo "   Name: $container_name"
-    echo "   Port: $port"
-    echo ""
-    echo "To view logs:    docker logs -f $container_name"
-    echo "To stop:         docker stop $container_name"
+    echo "✅ Started: $container_name on port $port"
+    echo "   Logs: docker logs -f $container_name"
+    echo "   Stop: docker stop $container_name"
     echo ""
     read -p "Press Enter to return to menu..."
 }
