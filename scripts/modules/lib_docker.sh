@@ -30,6 +30,9 @@ docker_launch_model() {
 
     IFS='|' read -r docker_img hf_id precision mtp_cap drafter_repo spec_args <<< "$profile_data"
 
+    # Define container path early (used in print and docker run)
+    local container_model_path="/models/$hf_id"
+
     # 2. Target path for base model
     local target_model_path="$MODELS_DIR/$hf_id"
 
