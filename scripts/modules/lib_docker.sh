@@ -98,6 +98,9 @@ docker_launch_model() {
     # Combine everything
     local final_flags="$base_flags $mtp_args"
 
+    # Define container path early (for printing)
+    local container_model_path="/models/$hf_id"
+
     echo "------------------------------------------------------------"
     echo "📋 RUNTIME PARAMETERS REVIEW (DOCKER)"
     echo "------------------------------------------------------------"
