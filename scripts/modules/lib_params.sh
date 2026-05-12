@@ -19,10 +19,9 @@ declare -A MODEL_PARAMS
 # Drafter: google/gemma-4-26B-A4B-it-assistant (current recommended for Gemma 4 MTP)
 MODEL_PARAMS["gemma4"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-27b|bfloat16|true|google/gemma-4-26B-A4B-it-assistant|NEXTN|--reasoning-parser gemma4 --tool-call-parser gemma4 --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name gemma --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
 
-# 2. Qwen 3.6 Series (Mamba Scheduler + MTP Support)
-# Both support MTP via NEXTN (they include mtp.safetensors)
-MODEL_PARAMS["qwen3.6-35b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-MoE|bfloat16|true||NEXTN|--mamba-scheduler-strategy extra_buffer --page-size 64 --reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --speculative-algorithm NEXTN --speculative-num-steps 3 --speculative-num-draft-tokens 4"
-MODEL_PARAMS["qwen3.6-27b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-27B|bfloat16|true||NEXTN|--mamba-scheduler-strategy extra_buffer --page-size 64 --reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --speculative-algorithm NEXTN --speculative-num-steps 3 --speculative-num-draft-tokens 4"
+# 2. Qwen 3.6 Series (Mamba Scheduler Support)
+MODEL_PARAMS["qwen3.6-35b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-MoE|bfloat16|false||--mamba-scheduler-strategy extra_buffer --page-size 64 --reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
+MODEL_PARAMS["qwen3.6-27b"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-27B|bfloat16|false||--mamba-scheduler-strategy extra_buffer --page-size 64 --reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
 
 # 3. NVIDIA Nemotron (Specialized Kernels)
 MODEL_PARAMS["nemotron"]="lmsysorg/sglang:dev-cu13-nemotronh-nano-omni-reasoning-v3|nvidia/nemotron-nano-omni|bfloat16|false|||--reasoning-parser nano_v3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
@@ -31,7 +30,8 @@ MODEL_PARAMS["nemotron"]="lmsysorg/sglang:dev-cu13-nemotronh-nano-omni-reasoning
 MODEL_PARAMS["mistral"]="lmsysorg/sglang:dev-cu13-mistral-medium-3.5|mistralai/Mistral-Medium-3.5|bfloat16|false|||--reasoning-parser mistral --tool-call-parser mistral --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name mistral --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
 
 # 5. DeepSeek (Blackwell Optimized)
-MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4-Flash|bfloat16|true||NEXTN|--reasoning-parser deepseek-v3 --tool-call-parser qwen3_coder --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192"
+# Using recommended flags from SGLang DeepSeek-V4 cookbook (tp=1 for single GPU)
+MODEL_PARAMS["deepseek"]="lmsysorg/sglang:deepseek-v4-blackwell|deepseek-ai/DeepSeek-V4-Flash|bfloat16|false|||--reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --allow-auto-truncate --temperature 0.6 --context-length 262111 --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 4096 --moe-runner-backend flashinfer_mxfp4 --speculative-algo EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --disable-flashinfer-autotune --swa-full-tokens-ratio 0.1 --trust-remote-code"
 
 # --- API FUNCTIONS ---
 
