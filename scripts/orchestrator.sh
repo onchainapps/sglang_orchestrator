@@ -70,7 +70,14 @@ menu_docker() {
                     sel="${keys[$((p_idx-1))]}"
                     read -p "Enable MTP? (y/n): " mtp_in
                     [[ "$mtp_in" == "y" ]] && mtp="true" || mtp="false"
-                    docker_launch_model "$sel" "$mtp"
+
+                    read -p "Memory fraction [0.75]: " mem_frac
+                    [ -z "$mem_frac" ] && mem_frac="0.75"
+
+                    read -p "Context length [262111]: " ctx_len
+                    [ -z "$ctx_len" ] && ctx_len="262111"
+
+                    docker_launch_model "$sel" "$mtp" "$mem_frac" "$ctx_len"
                 fi
                 read -p "Press enter..."
                 ;;

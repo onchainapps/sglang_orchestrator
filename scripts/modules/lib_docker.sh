@@ -17,6 +17,8 @@ source "$MODULE_DIR/lib_params.sh"
 docker_launch_model() {
     local profile_key=$1
     local use_mtp=${2:-false}
+    local mem_fraction=${3:-0.75}
+    local context_length=${4:-262111}
 
     # 1. Get core profile data from lib_params
     local profile_data
@@ -91,7 +93,7 @@ docker_launch_model() {
     local max_tokens="131072"
 
     # Base flags (common + memory management)
-    local base_flags="--reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --context-length 262111 --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
+    local base_flags="--reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --context-length $context_length --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
 
     # Model-specific overrides
     if [[ "$profile_key" == "gemma4" ]]; then
@@ -114,6 +116,7 @@ docker_launch_model() {
     echo "  Drafter:       ${drafter_repo:-None}"
     echo "  Port:          30001"
     echo "  Memory Frac:   $mem_fraction"
+    echo "  Context Len:   $context_length"
     echo "  MTP Mode:      $use_mtp"
     echo "  Final Flags:   $final_flags"
     echo "------------------------------------------------------------"
