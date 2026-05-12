@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator v12.0 - Official docs + user-selectable params
+# SGLang Orchestrator v12.5 - User-selectable Port
 # =============================================================================
 
 set -uo pipefail
@@ -16,14 +16,14 @@ source "$MODULE_DIR/lib_docker.sh"
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Orchestrator v12.0 (Official Settings)"
+    echo " SGLang Orchestrator v12.5 (with selectable port)"
     echo "============================================================"
 }
 
 menu_docker() {
     while true; do
         print_header
-        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 FP8 (Official Docs)"
+        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 FP8"
         echo "1) Launch Profile"
         echo "2) Show Status"
         echo "3) Back"
@@ -54,10 +54,13 @@ menu_docker() {
                 read -p "Context length [262144]: " ctx_len
                 ctx_len=${ctx_len:-262144}
 
+                read -p "Port [30001]: " port
+                port=${port:-30001}
+
                 read -p "Enable Speculative? (y/n): " mtp_in
                 mtp=$([[ "$mtp_in" == "y" ]] && echo "true" || echo "false")
 
-                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len"
+                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port"
                 read -p "Press enter..."
                 ;;
             2) docker_show_status; read -p "Press enter..." ;;
