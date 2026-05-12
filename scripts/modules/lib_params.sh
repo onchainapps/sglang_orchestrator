@@ -43,3 +43,16 @@ get_drafter_repo() {
         echo ""
     fi
 }
+
+get_profile_description() {
+    local key=$1
+    case $key in
+        gemma4)          echo "Dense • 27B • Google Gemma 4 (MTP supported)" ;;
+        qwen3.6-35b)     echo "MoE • 35B-A3B • Qwen3.6 Hybrid Mamba+MoE" ;;
+        qwen3.6-27b)     echo "Dense • 27B • Qwen3.6" ;;
+        nemotron)        echo "MoE • Nano Omni • NVIDIA Nemotron 3" ;;
+        mistral)         echo "MoE • Medium 3.5 • Mistral AI" ;;
+        deepseek)        echo "Dense • V4 • DeepSeek Blackwell Optimized" ;;
+        *)               echo "Unknown profile" ;;
+    esac
+}
