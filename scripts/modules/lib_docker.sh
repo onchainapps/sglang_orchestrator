@@ -92,12 +92,12 @@ docker_launch_model() {
     # Model-specific overrides
     if [[ "$profile_key" == "gemma4" ]]; then
         base_flags="--reasoning-parser gemma4 --tool-call-parser gemma4 --allow-auto-truncate --context-length $context_length --hf-chat-template-name gemma --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
-    elif [[ "$profile_key" == "deepseek" ]]; then
-        base_flags="--reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --allow-auto-truncate --context-length $context_length --hf-chat-template-name deepseek --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 4096 --moe-runner-backend flashinfer_mxfp4 --trust-remote-code"
     elif [[ "$profile_key" == "qwen3.6-35b" || "$profile_key" == "qwen3.6-27b" ]]; then
         base_flags="--mamba-scheduler-strategy extra_buffer --page-size 64 --reasoning-parser qwen3 --tool-call-parser qwen3_coder --allow-auto-truncate --context-length $context_length --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
     elif [[ "$profile_key" == "gemma4-31b" ]]; then
         base_flags="--reasoning-parser gemma4 --tool-call-parser gemma4 --allow-auto-truncate --context-length $context_length --hf-chat-template-name gemma --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
+    elif [[ "$profile_key" == "nemotron" ]]; then
+        base_flags="--reasoning-parser deepseek-r1 --tool-call-parser qwen3_coder --allow-auto-truncate --context-length $context_length --hf-chat-template-name qwen3 --max-running-requests 256 --schedule-policy lpm --chunked-prefill-size 8192 --trust-remote-code"
     fi
 
     # Combine everything
