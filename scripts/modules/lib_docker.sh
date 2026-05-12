@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.0 - Official settings + user-selectable TP / Memory / Context
+# lib_docker.sh v12.1 - Use python -m sglang.launch_server (fixes entrypoint error)
 # =============================================================================
 
 docker_launch_model() {
@@ -25,7 +25,7 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    full_cmd="$full_cmd lmsysorg/sglang:latest --model-path /models/$model_name --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --host 0.0.0.0 --port 30000 $base_flags"
+    full_cmd="$full_cmd lmsysorg/sglang:latest python -m sglang.launch_server --model-path /models/$model_name --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --host 0.0.0.0 --port 30000 $base_flags"
 
     if [ "$mtp" == "true" ]; then
         full_cmd="$full_cmd --speculative-algorithm EAGLE"
