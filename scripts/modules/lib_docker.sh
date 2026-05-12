@@ -1,9 +1,7 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v11.3 - Clean command builder (no duplicates)
+# lib_docker.sh v11.4 - Working string-based version
 # =============================================================================
-
-set -uo pipefail
 
 docker_launch_model() {
     local profile="$1"
@@ -20,32 +18,22 @@ docker_launch_model() {
 
     echo "🚀 Launching $profile (TP=$tp)"
 
-    local env_prefix=""
-    [ -n "$env_vars" ] && env_prefix="$env_vars "
-
-    local cmd=(
-        docker run --gpus all --rm -it
-        -v "$MODELS_DIR:/models"
-        -p 30000:30000
-        lmsysorg/sglang:latest
-        --model-path "/models/$model_name"
-        --tp "$tp"
-        --mem-fraction-static "$mem_frac"
-        --host 0.0.0.0
-        --port 30000
-    )
+    local full_cmd="docker run --gpus all --rm -it -v $MODELS_DIR:/models -p 30000:30000 lmsysorg/sglang:latest --model-path /models/$model_name --tp $tp --mem-fraction-static $mem_frac --host 0.0.0.0 --port 30000"
 
     if [ -n "$docker_flags" ]; then
-        read -ra f <<< "$docker_flags"
-        cmd+=("${f[@]}")
+        full_cmd="$full_cmd $docker_flags"
     fi
 
     if [ "$mtp" == "true" ]; then
-        cmd+=(--speculative-algorithm "EAGLE")
+        full_cmd="$full_cmd --speculative-algorithm EAGLE"
+    fi
+
+    if [ -n "$env_vars" ]; then
+        full_cmd="$env_vars $full_cmd"
     fi
 
     echo ""
-    echo "Command: ${cmd[*]}"
+    echo "Command: $full_cmd"
     echo ""
-    "${cmd[@]}"
+    eval "$full_cmd"
 }
