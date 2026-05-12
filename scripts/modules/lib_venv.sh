@@ -196,6 +196,6 @@ download_model() {
     mkdir -p "$MODELS_DIR/$REPO_ID"
     $PY_EXEC -c "
 from huggingface_hub import snapshot_download
-snapshot_download(repo_id='$REPO_ID', local_dir='$MODELS_DIR/$REPO_ID', local_dir_use_symlinks=False)
+snapshot_download(repo_id='$REPO_ID', local_dir='$MODELS_DIR/$REPO_ID')
 " && success "Download complete!" || error "Download failed"
 }

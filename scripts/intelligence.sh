@@ -190,7 +190,7 @@ download_model() {
 
     if command -v hf &> /dev/null; then
         log "Using 'hf' CLI for download..."
-        hf download "$REPO_ID" --local-dir "$MODELS_DIR/$REPO_ID" --local-dir-use-symlinks False && success "Download complete (via hf CLI)!" && return 0
+        hf download "$REPO_ID" --local-dir "$MODELS_DIR/$REPO_ID" && success "Download complete (via hf CLI)!" && return 0
     fi
 
     local PY_EXEC=$(get_python_env)
@@ -204,9 +204,8 @@ download_model() {
     
     $PY_EXEC -c "
 from huggingface_hub import snapshot_download
-import os
 try:
-    snapshot_download(repo_id='$REPO_ID', local_dir='$MODELS_DIR/$REPO_ID', local_dir_use_symlinks=False)
+    snapshot_download(repo_id='$REPO_ID', local_dir='$MODELS_DIR/$REPO_ID')
     print('SUCCESS')
 except Exception as e:
     print(f'ERROR: {e}')
