@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator v12.6 - Force FP8 for Gemma
+# SGLang Orchestrator v12.8 - Return to menu after launch
 # =============================================================================
 
 set -uo pipefail
@@ -16,17 +16,18 @@ source "$MODULE_DIR/lib_docker.sh"
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Orchestrator v12.6 (FP8 for Gemma)"
+    echo " SGLang Orchestrator v12.8 (Return to Menu)"
     echo "============================================================"
 }
 
 menu_docker() {
     while true; do
         print_header
-        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 FP8"
+        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 (FP8 + BF16)"
         echo "1) Launch Profile"
-        echo "2) Show Status"
-        echo "3) Back"
+        echo "2) Download Model from HF"
+        echo "3) Show Status"
+        echo "4) Back to Main Menu"
         read -p "Select: " opt
 
         case $opt in
@@ -43,7 +44,6 @@ menu_docker() {
                 read -p "Select Profile #: " p_idx
                 sel="${keys[$((p_idx-1))]}"
 
-                # User-selectable parameters
                 default_tp=$(get_default_tp "$sel")
                 read -p "TP size [default $default_tp]: " user_tp
                 tp=$(get_tp_for_launch "$sel" "$user_tp")
@@ -57,23 +57,30 @@ menu_docker() {
                 read -p "Port [30001]: " port
                 port=${port:-30001}
 
-                # FP8 option for Gemma models
                 use_fp8="false"
                 if [[ "$sel" == gemma* ]]; then
                     read -p "Use FP8 quantization for Gemma? (y/n): " fp8_in
-                    if [[ "$fp8_in" == "y" ]]; then
-                        use_fp8="true"
-                    fi
+                    [[ "$fp8_in" == "y" ]] && use_fp8="true"
                 fi
 
                 read -p "Enable Speculative? (y/n): " mtp_in
                 mtp=$([[ "$mtp_in" == "y" ]] && echo "true" || echo "false")
 
                 docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$use_fp8"
-                read -p "Press enter..."
+
+                echo ""
+                echo "Server stopped or exited."
+                read -p "Press Enter to return to menu..."
                 ;;
-            2) docker_show_status; read -p "Press enter..." ;;
-            3) return ;;
+            2)
+                read -p "Enter HF Repo ID (e.g. Qwen/Qwen3.6-35B-A3B-FP8): " hf_repo
+                if [ -n "$hf_repo" ]; then
+                    bash "$SCRIPT_DIR/intelligence.sh" --download "$hf_repo"
+                fi
+                read -p "Press enter to return to menu..."
+                ;;
+            3) docker_show_status; read -p "Press enter to return to menu..." ;;
+            4) return ;;
         esac
     done
 }
