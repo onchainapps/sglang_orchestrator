@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.1 - Use python -m sglang.launch_server (fixes entrypoint error)
+# lib_docker.sh v12.3 - Correct nested model path (Qwen/ and google/)
 # =============================================================================
 
 docker_launch_model() {
@@ -14,8 +14,8 @@ docker_launch_model() {
     env_vars=$(get_env_vars "$profile")
     local base_flags
     base_flags=$(get_base_flags "$profile")
-    local model_name
-    model_name=$(basename "$(get_profile_data "$profile" | cut -d'|' -f2)")
+    local hf_repo
+    hf_repo=$(get_profile_data "$profile" | cut -d'|' -f2)
 
     echo "🚀 Launching $profile (TP=$tp, mem=$mem_frac, ctx=$ctx_len)"
 
@@ -25,7 +25,8 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    full_cmd="$full_cmd lmsysorg/sglang:latest python -m sglang.launch_server --model-path /models/$model_name --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --host 0.0.0.0 --port 30000 $base_flags"
+    # Use full relative path (handles Qwen/ and google/ nesting)
+    full_cmd="$full_cmd lmsysorg/sglang:latest sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port 30000 $base_flags"
 
     if [ "$mtp" == "true" ]; then
         full_cmd="$full_cmd --speculative-algorithm EAGLE"
