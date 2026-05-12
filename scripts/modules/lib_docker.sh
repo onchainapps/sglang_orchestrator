@@ -50,33 +50,35 @@ docker_launch_model() {
         fi
     fi
 
-    # 4. Handle Speculative Decoding (MTP) logic
+    # 4. Handle Speculative Decoding (MTP) logic - supports both external drafter and built-in MTP
     local mtp_args=""
     if [[ "$use_mtp" == "true" && "$mtp_cap" == "true" ]]; then
-        if [ -z "$drafter_repo" ]; then
-            echo -e "\033[0;31m[ERROR]\033[0m This profile supports MTP but no drafter model is defined in lib_params.sh"
-            return 1
-        fi
-
-        local drafter_path="$MODELS_DIR/$drafter_repo"
         local spec_algo
         spec_algo=$(get_spec_algo "$profile_key")
 
-        # Check if Drafter exists, if not, download
-        if [ ! -d "$drafter_path" ] || [ ! -f "$drafter_path/config.json" ]; then
-            echo -e "\033[1;33m⚠️  Drafter Model not found: $drafter_repo\033[0m"
-            read -p "Download Drafter model now? (y/n): " dl_choice
-            if [[ "$dl_choice" =~ ^[yY]$ ]]; then
-                bash "$MODULE_DIR/../intelligence.sh" --download "$drafter_repo"
-                drafter_path="$MODELS_DIR/$drafter_repo"
-            else
-                echo -e "\033[0;31m[ERROR] Drafter required for MTP. Aborting.\033[0m"
-                return 1
-            fi
-        fi
+        if [ -n "$drafter_repo" ]; then
+            # Case 1: External drafter (e.g. Gemma 4)
+            local drafter_path="$MODELS_DIR/$drafter_repo"
 
-        echo "  [MTP] Applying Speculative Decoding ($spec_algo)..."
-        mtp_args="--speculative-algorithm $spec_algo --speculative-draft-model-path $drafter_path --speculative-num-steps 5 --speculative-num-draft-tokens 6"
+            if [ ! -d "$drafter_path" ] || [ ! -f "$drafter_path/config.json" ]; then
+                echo -e "\033[1;33m⚠️  Drafter Model not found: $drafter_repo\033[0m"
+                read -p "Download Drafter model now? (y/n): " dl_choice
+                if [[ "$dl_choice" =~ ^[yY]$ ]]; then
+                    bash "$MODULE_DIR/../intelligence.sh" --download "$drafter_repo"
+                    drafter_path="$MODELS_DIR/$drafter_repo"
+                else
+                    echo -e "\033[0;31m[ERROR] Drafter required for MTP. Aborting.\033[0m"
+                    return 1
+                fi
+            fi
+
+            echo "  [MTP] Applying Speculative Decoding with external drafter ($spec_algo)..."
+            mtp_args="--speculative-algorithm $spec_algo --speculative-draft-model-path $drafter_path --speculative-num-steps 5 --speculative-num-draft-tokens 6"
+        else
+            # Case 2: Built-in MTP (Qwen3.6, DeepSeek) - no external drafter needed
+            echo "  [MTP] Applying built-in Speculative Decoding ($spec_algo)..."
+            mtp_args="--speculative-algorithm $spec_algo --speculative-num-steps 3 --speculative-num-draft-tokens 4"
+        fi
     fi
 
     # 5. Prepare Launch Command
