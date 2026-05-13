@@ -53,8 +53,8 @@ menu_docker() {
                 read -p "Memory fraction [0.82]: " mem_frac
                 mem_frac=${mem_frac:-0.82}
 
-                read -p "Context length [1048576]: " ctx_len
-                ctx_len=${ctx_len:-1048576}
+                read -p "Context length [262144]: " ctx_len
+                ctx_len=${ctx_len:-262144}
 
                 read -p "Port [30001]: " port
                 port=${port:-30001}

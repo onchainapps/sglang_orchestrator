@@ -89,9 +89,14 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    # Unified launch flags — must match VENV path
-    # 1M context (max SGLang supports) — heavy coding workflows
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length 1048576 --max-running-requests 16 --max-total-tokens 1048576 --chunked-prefill-size 8192 --allow-auto-truncate --trust-remote-code --host 0.0.0.0 --port $port --schedule-policy lru"
+    # Context: SGLang PagedAttention only allocates slots for loaded tokens,
+    # but mem-fraction-static caps total KV cache budget. 1M context-length
+    # works when the actual sequence fits in the KV cache budget. On 128GB GPU
+    # with 0.82 fraction: model ≈62GB, leaving ~43GB for KV cache.
+    # That's ~32k tokens (128-bit, gemma) or ~64k tokens (qwen).
+    # We set high context-length but rely on mem-fraction to limit actual
+    # KV cache. User may need to lower mem-fraction or context-length if OOM.
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length 262144 --max-running-requests 16 --max-total-tokens 131072 --chunked-prefill-size 8192 --allow-auto-truncate --trust-remote-code --host 0.0.0.0 --port $port --schedule-policy lru"
 
     if [ "$use_fp8" == "true" ]; then
         full_cmd="$full_cmd --quantization fp8"

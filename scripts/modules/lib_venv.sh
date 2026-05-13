@@ -77,9 +77,9 @@ venv_launch_model() {
     CMD="$PY_EXEC -m sglang.launch_server \
     --model-path \"$MODEL_PATH\" \
     --mem-fraction-static $MEM \
-    --context-length 1048576 \
+    --context-length 262144 \
     --max-running-requests 16 \
-    --max-total-tokens 1048576 \
+    --max-total-tokens 131072 \
     --chunked-prefill-size 8192 \
     --allow-auto-truncate \
     --schedule-policy lru \
@@ -101,9 +101,9 @@ venv_launch_model() {
     echo "  Model Path:         $MODEL_PATH"
     echo "  Port:               $PORT"
     echo "  Memory Frac:        $MEM"
-    echo "  Context Length:     1048576"
+    echo "  Context Length:     262144"
     echo "  Max Running Reqs:   16"
-    echo "  Max Total Tokens:   1048576"
+    echo "  Max Total Tokens:   131072"
     echo "  Chunked Prefill:    8192"
     echo "  Schedule Policy:    lru"
     echo "  TP Size:            $TP"
