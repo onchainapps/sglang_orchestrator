@@ -1,25 +1,29 @@
 #!/bin/bash
 # =============================================================================
-# SGLang Orchestrator v12.8 - Return to menu after launch
+# SGLang Orchestrator v13.0 — Docker & VENV Launch (parallel paths)
 # =============================================================================
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export MODELS_DIR="$PROJECT_ROOT/models"
 
 MODULE_DIR="$SCRIPT_DIR/modules"
 source "$MODULE_DIR/lib_params.sh"
 source "$MODULE_DIR/lib_docker.sh"
+source "$MODULE_DIR/lib_models.sh"
 
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Orchestrator v12.8 (Return to Menu)"
+    echo " SGLang Orchestrator v13.0 (Docker + VENV)"
     echo "============================================================"
 }
 
+# =============================================================================
+# DOCKER MENU
+# =============================================================================
 menu_docker() {
     while true; do
         print_header
@@ -75,7 +79,7 @@ menu_docker() {
             2)
                 read -p "Enter HF Repo ID (e.g. Qwen/Qwen3.6-35B-A3B-FP8): " hf_repo
                 if [ -n "$hf_repo" ]; then
-                    bash "$SCRIPT_DIR/intelligence.sh" --download "$hf_repo"
+                    download_model "$hf_repo"
                 fi
                 read -p "Press enter to return to menu..."
                 ;;
@@ -85,13 +89,68 @@ menu_docker() {
     done
 }
 
+# =============================================================================
+# VENV MENU
+# =============================================================================
+menu_venv() {
+    while true; do
+        print_header
+        echo "🐍 [VENV] - Direct Python Launch (sglang_venv)"
+        echo "1) Launch Model"
+        echo "2) Download Model from HF"
+        echo "3) Show Status"
+        echo "4) Back to Main Menu"
+        read -p "Select: " opt
+
+        case $opt in
+            1)
+                source "$MODULE_DIR/lib_venv.sh"
+                venv_launch_model
+                echo ""
+                read -p "Press Enter to return to menu..."
+                ;;
+            2)
+                read -p "Enter HF Repo ID: " hf_repo
+                if [ -n "$hf_repo" ]; then
+                    download_model "$hf_repo"
+                fi
+                read -p "Press enter to return to menu..."
+                ;;
+            3)
+                echo ""
+                echo "=== Running SGLang Engines (VENV) ==="
+                if ! pgrep -f "sglang.launch_server" > /dev/null; then
+                    echo "No running SGLang engines."
+                else
+                    printf "%-8s | %-60s | %-8s\n" "PID" "MODEL" "PORT"
+                    echo "----------------------------------------------------------------"
+                    ps aux | grep "sglang.launch_server" | grep -v grep | while read -r line; do
+                        pid=$(echo "$line" | awk '{print $2}')
+                        port=$(echo "$line" | grep -o '--port [0-9]*' | grep -o '[0-9]*' || echo "N/A")
+                        model_path=$(echo "$line" | grep -o '--model-path [^ ]*' | cut -d' ' -f2- || echo "unknown")
+                        model_name=$(basename "$model_path" 2>/dev/null || echo "$model_path")
+                        printf "%-8s | %-60s | %-8s\n" "$pid" "${model_name:0:58}" "$port"
+                    done
+                fi
+                read -p "Press enter to return to menu..."
+                ;;
+            4) return ;;
+        esac
+    done
+}
+
+# =============================================================================
+# MAIN MENU
+# =============================================================================
 while true; do
     print_header
     echo "1) Docker Launch"
-    echo "2) Exit"
+    echo "2) VENV Launch"
+    echo "3) Exit"
     read -p "Select: " main_opt
     case $main_opt in
         1) menu_docker ;;
-        2) exit 0 ;;
+        2) menu_venv ;;
+        3) exit 0 ;;
     esac
 done

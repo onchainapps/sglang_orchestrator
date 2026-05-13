@@ -1,51 +1,139 @@
-# SGLang Orchestrator - FIXED Version (v10.3)
+# SGLang Orchestrator
 
-**Date:** 2026-05-11  
-**Status:** All critical bugs resolved
+**Version:** 13.0  
+**Last Updated:** 2026-05-12  
+**Purpose:** Manage SGLang inference engine deployments via Docker or VENV
 
-## What Was Broken & Fixed
+## Architecture
 
-### 1. `lib_params.sh` (Critical)
-- **Problem:** ~45 duplicate identical `get_special_args()` functions + duplicate comment block.
-- **Fix:** Completely cleaned. Only one clean definition remains.
+```
+orchestrator.sh (TUI)
+├── Docker Path → lib_docker.sh + lib_params.sh
+│   ├── Containerized SGLang serve
+│   ├── Pre-configured model profiles
+│   └── Speculative decoding support (EAGLE/NEXTN)
+│
+├── VENV Path → lib_venv.sh + lib_models.sh
+│   ├── Direct Python venv launch
+│   ├── Auto-detect model flags
+│   └── Auto-download from HuggingFace
+│
+├── intelligence.sh (standalone CLI)
+│   ├── --scan, --select-launch, --download
+│   └── Reusable by other tools
+│
+├── operations.sh (standalone CLI)
+│   ├── --list, --kill <pid>, --logs
+│   └── Process management
+│
+├── expose-api.sh (standalone CLI)
+│   ├── --proxy, --proxy-secure, --proxy-harden
+│   └── Nginx/Certbot/UFW production exposure
+│
+└── modules/
+    ├── lib_params.sh    — Model profile registry (6 profiles)
+    ├── lib_models.sh    — Shared utilities (download, scan, detect)
+    ├── lib_docker.sh    — Docker launch + status
+    ├── lib_venv.sh      — VENV launch (standalone)
+    ├── lib_api.sh       — API exposure wrapper (standalone)
+    └── lib_docker.sh    — Docker utilities
+```
 
-### 2. `lib_venv.sh` (Critical)
-- **Problem:** Missing `venv_scan_models()` and `venv_launch_model()` wrappers that `orchestrator.sh` expected.
-- **Fix:** Added proper public API wrappers + removed duplicate/messy code.
+**Design Principle:** Docker and VENV are parallel, independent paths. They share utilities (`lib_models.sh`) but never cross-pollinate business logic.
 
-### 3. `intelligence.sh` (Critical)
-- **Problem:** Undefined variable `$profile_key` in `select_and_launch()` causing errors during auto-download.
-- **Fix:** Removed the broken drafter logic block (it was incorrectly copied from Docker flow).
+## Model Profiles
 
-### 4. `lib_api.sh` (High)
-- **Problem:** Called `expose-api.sh` with `--port` (unsupported flag).
-- **Fix:** Changed to correct invocation: `--proxy --api-port "$port"`
+| Profile | Model | TP | Quant | Speculative |
+|---------|-------|----|----|-------------|
+| `qwen-27b-fp8` | Qwen3.6-27B-FP8 | 1 | FP8 | EAGLE + Spec V2 |
+| `qwen-35b-a3b-fp8` | Qwen3.6-35B-A3B-FP8 | 2 | FP8 | EAGLE + Spec V2 |
+| `qwen-27b-bf16` | Qwen3.6-27B | 1 | BF16 | None |
+| `qwen-35b-a3b-bf16` | Qwen3.6-35B-A3B | 2 | BF16 | None |
+| `gemma-4-26b-a4b` | Gemma 4 26B-A4B | 2 | BF16 | NEXTN (MTP) |
+| `gemma-4-31b` | Gemma 4 31B | 2 | BF16 | NEXTN (MTP) |
 
-### 5. `orchestrator.sh`
-- Minor version bump + added "FIXED" header for clarity.
+## Usage
 
-## How to Use the Fixed Version
+### Main TUI
+```bash
+cd ~/llms/sglang_orchestrator
+chmod +x *.sh
+./scripts/orchestrator.sh
+```
 
-1. Replace your `scripts/modules/` directory with the files in this folder.
-2. Make sure `expose-api.sh` and `intelligence.sh` are in the parent `scripts/` directory.
-3. Run:
-   ```bash
-   chmod +x *.sh
-   ./orchestrator.sh
-   ```
+### Docker Path
+1. Select "Docker Launch" from main menu
+2. Choose a profile
+3. Configure TP, memory, context length, port
+4. Enable FP8 (Gemma) and speculative decoding as needed
 
-## Files Included (Complete Fixed Set)
+### VENV Path
+1. Select "VENV Launch" from main menu
+2. Select a model from local scan (or auto-download)
+3. Configure port, memory, TP
+4. Server starts in background with logging
 
-- `orchestrator.sh`          ← Main entry point (v10.3)
-- `lib_params.sh`            ← Clean parameter library
-- `lib_venv.sh`              ← Fixed VENV module with wrappers
-- `lib_docker.sh`            ← Unchanged (was already good)
-- `lib_api.sh`               ← Fixed API exposure
-- `intelligence.sh`          ← Fixed download/launch logic
-- `operations.sh`            ← Unchanged
-- `expose-api.sh`            ← Unchanged
-- `links.md` & `README.md`   ← Reference docs
+### Standalone CLI Tools
 
-All scripts are now fully functional and consistent.
+**Model scan/launch (VENV):**
+```bash
+./scripts/intelligence.sh --scan              # List local models
+./scripts/intelligence.sh --select-launch      # Interactive launch
+./scripts/intelligence.sh --download <repo>    # Download from HuggingFace
+```
 
-Enjoy your clean SGLang orchestrator! 🚀
+**Process management:**
+```bash
+./scripts/operations.sh --list                 # Show running engines
+./scripts/operations.sh --kill <pid>           # Stop an engine
+./scripts/operations.sh --logs                 # Tail latest log
+```
+
+**Production API exposure:**
+```bash
+./scripts/expose-api.sh --proxy --api-port 30001           # Nginx only
+./scripts/expose-api.sh --proxy-secure --api-port 30001 --domain example.com  # + SSL
+./scripts/expose-api.sh --proxy-harden --api-port 30001 --domain example.com  # + SSL + UFW
+```
+
+## File Structure
+
+```
+sglang_orchestrator/
+├── models/                          # Downloaded model weights
+├── logs/                            # Server logs
+├── sglang_venv/                     # Python virtual environment
+├── scripts/
+│   ├── orchestrator.sh              ← Main TUI entry point (v13.0)
+│   ├── intelligence.sh              ← Standalone: scan/launch/download
+│   ├── expose-api.sh                ← Standalone: Nginx/Certbot/UFW
+│   ├── operations.sh                ← Standalone: process management
+│   └── modules/
+│       ├── lib_params.sh            ← Model profile registry
+│       ├── lib_models.sh            ← Shared utilities (v1.0)
+│       ├── lib_docker.sh            ← Docker launch/status
+│       ├── lib_venv.sh              ← VENV launch (standalone)
+│       ├── lib_api.sh               ← API exposure wrapper
+│       └── lib_docker.sh            ← Docker utilities
+└── CLEANUP_PLAN.md                  # Cleanup plan (executed)
+```
+
+## Changelog
+
+### v13.0 (2026-05-12)
+- Created `lib_models.sh` shared utility library (download, scan, detect)
+- Deduplicated `get_python_env()`, `detect_model_flags()`, `scan_models_internal()`, `download_model()` between intelligence.sh and lib_venv.sh
+- Added VENV menu to orchestrator.sh (Launch, Download, Status, Back)
+- Added Docker status display to Docker menu
+- Rewrote README with full architecture documentation
+- All scripts pass `bash -n` syntax check
+
+### v12.8 (previous)
+- Return to menu after launch
+- MTP fixes across multiple commits
+
+### v10.3 (FIXED)
+- Cleaned `lib_params.sh` — removed ~45 duplicate `get_special_args()` functions
+- Added `venv_scan_models()` and `venv_launch_model()` wrappers to `lib_venv.sh`
+- Fixed undefined `$profile_key` in `intelligence.sh`
+- Fixed `lib_api.sh` calling `expose-api.sh` with wrong flags
