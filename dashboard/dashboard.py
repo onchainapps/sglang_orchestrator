@@ -11,37 +11,12 @@ from textual.widgets import (
     TabPane,
     RichLog,
     Static,
-    Button,
-    Switch,
 )
 from textual.screen import Screen
 from textual.containers import Horizontal
 from textual import on
-
-
-class ContainerDetailsScreen(Screen):
-    """Container details screen with model info and controls."""
-
-    BINDINGS = [
-        Binding("escape", "pop_screen", "Back"),
-    ]
-
-    def __init__(self, container_name: str):
-        super().__init__()
-        self.container_name = container_name
-
-    def compose(self) -> ComposeResult:
-        yield Header()
-        yield Static(f"Container: {self.container_name}", id="detail-title")
-        yield Static("", id="model-info")
-        yield Horizontal(
-            Button("Restart", id="restart-btn"),
-            Button("Stop", id="stop-btn"),
-            Button("Logs", id="logs-btn"),
-            Button("Back", id="back-btn"),
-            id="controls"
-        )
-        yield Footer()
+import subprocess
+import json
 
 
 class OrchestratorDashboard(App):
@@ -89,7 +64,6 @@ class OrchestratorDashboard(App):
         Binding("q", "quit", "Quit", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("l", "toggle_logs", "Toggle Logs", show=True),
-        Binding("d", "details", "Details", show=True),
         Binding("n", "nginx_status", "Nginx", show=True),
         Binding("k", "kernel_tuning", "Tune Kernels", show=True),
     ]
@@ -98,41 +72,36 @@ class OrchestratorDashboard(App):
         """Create child widgets for the app."""
         yield Header()
         yield Static("GPU: N/A | VRAM: N/A | Load: N/A", id="status-bar")
-        yield TabbedContent(initial="containers")
+        
+        with TabbedContent(id="main-tabs"):
+            with TabPane("Containers", id="tab-containers"):
+                yield DataTable(id="containers-table")
+            
+            with TabPane("Logs", id="tab-logs"):
+                yield Static("Select a container:", id="log-selector")
+                yield RichLog(id="log-viewer", wrap=True, markup=True)
+            
+            with TabPane("Nginx", id="tab-nginx"):
+                yield DataTable(id="nginx-table")
+                yield RichLog(id="nginx-log", wrap=True)
+            
+            with TabPane("Kernel Tuning", id="tab-kernel"):
+                yield Static("Kernel Tuning Status", id="kernel-status")
+                yield RichLog(id="kernel-log", wrap=True)
+        
         yield Footer()
 
     async def on_mount(self) -> None:
         """Initialize dashboard."""
-        # Setup containers tab
-        containers_pane = TabPane("Containers", id="containers-pane")
-        containers_pane.mount(DataTable(id="containers-table"))
-        
-        # Setup logs tab
-        logs_pane = TabPane("Logs", id="logs-pane")
-        logs_pane.mount(
-            Static("Select a container:", id="log-selector"),
-            RichLog(id="log-viewer", wrap=True, markup=True)
+        # Setup container table columns
+        table = self.query_one("#containers-table", DataTable)
+        table.add_columns(
+            "NAME", "IMAGE", "STATUS", "PORT", "CPU", "MEM/VRAM", "UPTIME"
         )
         
-        # Setup nginx status tab
-        nginx_pane = TabPane("Nginx", id="nginx-pane")
-        nginx_pane.mount(
-            DataTable(id="nginx-table"),
-            RichLog(id="nginx-log", wrap=True)
-        )
-        
-        # Setup kernel tuning tab
-        kernel_pane = TabPane("Kernel Tuning", id="kernel-pane")
-        kernel_pane.mount(
-            Static("Kernel Tuning Status", id="kernel-status"),
-            RichLog(id="kernel-log", wrap=True)
-        )
-        
-        tabbed = self.query_one(TabbedContent)
-        tabbed.mount(containers_pane)
-        tabbed.mount(logs_pane)
-        tabbed.mount(nginx_pane)
-        tabbed.mount(kernel_pane)
+        # Setup nginx table columns
+        nginx_table = self.query_one("#nginx-table", DataTable)
+        nginx_table.add_columns("SERVICE", "STATUS", "UPTIME", "CONNECTIONS")
         
         # Initial data load
         await self.refresh_data()
@@ -143,9 +112,6 @@ class OrchestratorDashboard(App):
     async def refresh_data(self) -> None:
         """Refresh dashboard data."""
         try:
-            import subprocess
-            import json
-            
             # Fetch container data
             result = subprocess.run(
                 ["docker", "ps", "-a", "--filter", "name=sglang-", "--format", 
@@ -156,9 +122,6 @@ class OrchestratorDashboard(App):
             if result.returncode == 0 and result.stdout.strip():
                 table = self.query_one("#containers-table", DataTable)
                 table.clear()
-                table.add_columns(
-                    "NAME", "IMAGE", "STATUS", "PORT", "CPU", "MEM/VRAM", "UPTIME"
-                )
                 
                 for line in result.stdout.strip().split("\n"):
                     if not line:
@@ -189,7 +152,6 @@ class OrchestratorDashboard(App):
     async def update_gpu_status(self) -> None:
         """Update GPU status bar."""
         try:
-            import subprocess
             result = subprocess.run(
                 ["nvidia-smi", "--query-gpu=temperature.gpu,power.draw,power.limit,utilization.gpu", 
                  "--format=csv,noheader"],
@@ -206,8 +168,6 @@ class OrchestratorDashboard(App):
     async def update_nginx_status(self) -> None:
         """Update nginx status."""
         try:
-            import subprocess
-            
             # Check if nginx is running
             result = subprocess.run(
                 ["systemctl", "is-active", "nginx"],
@@ -222,29 +182,7 @@ class OrchestratorDashboard(App):
             nginx_table.add_columns("SERVICE", "STATUS", "UPTIME", "CONNECTIONS")
             
             if nginx_status == "Running":
-                # Get nginx uptime
-                uptime_result = subprocess.run(
-                    ["systemctl", "status", "nginx"],
-                    capture_output=True, text=True, timeout=3
-                )
-                uptime = "N/A"
-                for line in uptime_result.stdout.split("\n"):
-                    if "Active:" in line:
-                        uptime = line.split("Active:")[1].strip() if "Active:" in line else "N/A"
-                        break
-                
-                # Get connections (from nginx status page if enabled)
-                connections = "N/A"
-                try:
-                    import httpx
-                    async with httpx.AsyncClient() as client:
-                        response = await client.get("http://localhost/nginx_status", timeout=2)
-                        if response.status_code == 200:
-                            connections = response.text.split("\n")[2].strip() if "Active connections:" in response.text else "N/A"
-                except Exception:
-                    pass
-                
-                nginx_table.add_row("nginx", "Running", uptime, connections)
+                nginx_table.add_row("nginx", "Running", "Active", "N/A")
             else:
                 nginx_table.add_row("nginx", "Stopped", "-", "-")
                 
@@ -257,36 +195,21 @@ class OrchestratorDashboard(App):
 
     def action_toggle_logs(self) -> None:
         """Toggle logs visibility."""
-        tabbed = self.query_one(TabbedContent)
-        if tabbed.active == "containers":
-            tabbed.active = "logs"
+        tabbed = self.query_one("#main-tabs", TabbedContent)
+        if tabbed.active_pane and tabbed.active_pane.id == "tab-containers":
+            tabbed.active_pane = tabbed.query_one("#tab-logs", TabPane)
         else:
-            tabbed.active = "containers"
-
-    def action_details(self) -> None:
-        """Show container details."""
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["docker", "ps", "--filter", "name=sglang-", "--format", "{{.Names}}"],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                containers = result.stdout.strip().split("\n")
-                if containers:
-                    self.push_screen(ContainerDetailsScreen(containers[0]))
-        except Exception:
-            pass
+            tabbed.active_pane = tabbed.query_one("#tab-containers", TabPane)
 
     def action_nginx_status(self) -> None:
         """Switch to nginx tab."""
-        tabbed = self.query_one(TabbedContent)
-        tabbed.active = "nginx"
+        tabbed = self.query_one("#main-tabs", TabbedContent)
+        tabbed.active_pane = tabbed.query_one("#tab-nginx", TabPane)
 
     def action_kernel_tuning(self) -> None:
         """Switch to kernel tuning tab."""
-        tabbed = self.query_one(TabbedContent)
-        tabbed.active = "kernel"
+        tabbed = self.query_one("#main-tabs", TabbedContent)
+        tabbed.active_pane = tabbed.query_one("#tab-kernel", TabPane)
 
 
 if __name__ == "__main__":
