@@ -45,7 +45,11 @@ docker_launch_model() {
         image="lmsysorg/sglang:cu13-gemma4"
     fi
 
-    local container_name="sglang-$(echo $profile | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+    local suffix=""
+    if [[ "$mtp" == "true" ]]; then
+        suffix="-mtp"
+    fi
+    local container_name="sglang-$(echo $profile | tr '[:upper:]' '[:lower:]' | tr -d '-')${suffix}"
 
     echo ""
     echo "🚀 Launching $profile in background (TP=$tp, port=$port)"
