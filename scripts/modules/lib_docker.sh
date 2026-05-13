@@ -40,6 +40,31 @@ docker_launch_model() {
         fi
     fi
 
+    # Check for running containers
+    local running_containers
+    running_containers=$(docker ps --filter "name=sglang-" --format "{{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null)
+    if [ -n "$running_containers" ]; then
+        echo ""
+        echo "⚠️  SGLang container(s) already running:"
+        echo "------------------------------------------------------------"
+        printf "%-35s | %-20s | %s\n" "NAME" "STATUS" "PORTS"
+        echo "------------------------------------------------------------"
+        echo "$running_containers" | while IFS=$'\t' read -r name status ports; do
+            printf "%-35s | %-20s | %s\n" "$name" "$status" "$ports"
+        done
+        echo "------------------------------------------------------------"
+        read -p "Stop running container(s) and proceed? (y/n): " stop_existing
+        if [[ "$stop_existing" != "y" ]]; then
+            echo "Launch cancelled."
+            return 1
+        fi
+        echo ""
+        echo "Stopping existing containers..."
+        docker stop $(docker ps --filter "name=sglang-" -q) 2>/dev/null
+        docker rm $(docker ps -a --filter "name=sglang-" -q) 2>/dev/null
+        echo "Existing containers stopped."
+    fi
+
     local image="lmsysorg/sglang:latest"
     if [[ "$profile" == gemma* ]]; then
         image="lmsysorg/sglang:cu13-gemma4"
