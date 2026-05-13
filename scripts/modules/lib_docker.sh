@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.13 - Default max-running-requests = 2, max-total-tokens = ctx_len
+# lib_docker.sh v12.14 - Optimized for Blackwell (reqs=8, ctx=128000, mem=0.85, page-size removed)
 # =============================================================================
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -100,12 +100,11 @@ docker_show_status() {
 docker_launch_model() {
     local profile="$1"
     local mtp="$2"
-    local mem_frac="${3:-0.82}"
-    local tp="${4:-2}"
-    local ctx_len="${5:-262144}"
+    local mem_frac="${3:-0.85}"
+    local tp="${4:-1}"
+    local ctx_len="${5:-128000}"
     local port="${6:-30001}"
-    local reqs="${7:-2}"
-    local pg_size="${8:-16}"
+    local reqs="${7:-8}"
 
     # --- Profile-specific safety overrides (covers both MTP & non-MTP paths) ---
     if [[ "$profile" == "gemma-4-31b" ]]; then
@@ -181,11 +180,11 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    # RTX 6000 Ada (96GB) budget:
-    # --mem-fraction-static: 0.85 for FP8/MoE (safe), 0.80 for BF16 dense
-    # Radix cache + CUDA graph enabled by default (keep enabled)
-    # max-running-requests: 2 for single-user coding sessions
-    # max-total-tokens: MUST equal ctx_len — old bug set it to ctx_len/2
+    # RTX 6000 Blackwell (96GB) budget:
+    # --mem-fraction-static: 0.85 default (optimized for BF16/MoE)
+    # Radix cache + CUDA graph enabled by default
+    # max-running-requests: 8 for multi-user team scenarios
+    # max-total-tokens: MUST equal ctx_len
     # --allow-auto-truncate: safety net if context overflows
     # --- TURBO MODE FOR QWEN 35B ---
     local chunk_size=8192
@@ -195,7 +194,7 @@ docker_launch_model() {
         piecewise_graph="--enable-piecewise-cuda-graph"
     fi
 
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port $piecewise_graph --page-size $pg_size"
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port $piecewise_graph"
 
     # SGLang API key authentication
     if [ -n "${API_KEY:-}" ]; then

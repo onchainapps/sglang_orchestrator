@@ -120,14 +120,11 @@ menu_docker() {
                 read -p "TP size [default $default_tp]: " user_tp
                 tp=$(get_tp_for_launch "$sel" "$user_tp")
 
-                read -p "Max concurrent requests [default 2]: " user_reqs
-                reqs=${user_reqs:-2}
+                read -p "Max concurrent requests [default 8]: " user_reqs
+                reqs=${user_reqs:-8}
 
-                read -p "Page size [default 16]: " user_pg
-                pg_size=${user_pg:-16}
-
-                read -p "Memory fraction [0.82]: " mem_frac
-                mem_frac=${mem_frac:-0.82}
+                read -p "Memory fraction [0.85]: " mem_frac
+                mem_frac=${mem_frac:-0.85}
                 # Per-model defaults: MTP models need more VRAM for draft weights
                 if [[ "$sel" == gemma-4-31b ]]; then
                     mem_frac=${mem_frac:-0.78}  # 31B needs more headroom for weights+KV cache
@@ -142,8 +139,8 @@ menu_docker() {
                     mem_frac=${mem_frac:-0.85}  # FP8 is more memory efficient
                 fi
 
-                read -p "Context length [262144]: " ctx_len
-                ctx_len=${ctx_len:-262144}
+                read -p "Context length [128000]: " ctx_len
+                ctx_len=${ctx_len:-128000}
                 # 31B sliding window profiler is too conservative (~20K tokens)
                 if [[ "$sel" == gemma-4-31b ]]; then
                     ctx_len=${ctx_len:-32768}
@@ -163,7 +160,7 @@ menu_docker() {
                 [ -n "$DOCKER_API_KEY" ] && export API_KEY="$DOCKER_API_KEY"
                 [ -n "$DOCKER_ADMIN_API_KEY" ] && export ADMIN_API_KEY="$DOCKER_ADMIN_API_KEY"
 
-                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$reqs" "$pg_size"
+                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$reqs"
 
                 echo ""
                 echo "Server stopped or exited."
