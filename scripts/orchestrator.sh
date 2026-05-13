@@ -95,8 +95,8 @@ menu_proxy() {
 menu_docker() {
     while true; do
         print_header
-        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 (BF16)"
-        echo "1) Launch Profile"
+        echo "🐳 [DOCKER] - Dynamic Model Detection"
+        echo "1) Launch Profile (auto-detected + predefined)"
         echo "2) Download Model from HF"
         echo "3) Show Status"
         echo "4) Back to Main Menu"
@@ -104,27 +104,80 @@ menu_docker() {
 
         case $opt in
             1)
+                # --- Auto-detect models in ~/llms/models ---
+                local -a all_options=()
+                local -a all_descriptions=()
+                local i=1
+
+                # Scan subdirectories in MODELS_DIR
+                if [ -d "$MODELS_DIR" ]; then
+                    local -a detected_dirs=()
+                    while IFS= read -r dir; do
+                        detected_dirs+=("$dir")
+                    done < <(find "$MODELS_DIR" -mindepth 1 -maxdepth 2 -type d 2>/dev/null | sort)
+
+                    if [ ${#detected_dirs[@]} -gt 0 ]; then
+                        echo ""
+                        echo "📂 Models Detected in $MODELS_DIR:"
+                        for dir in "${detected_dirs[@]}"; do
+                            local rel_path="${dir#$MODELS_DIR/}"
+                            local name=$(basename "$dir")
+                            # Check if it matches a predefined profile
+                            local matched_profile=""
+                            for p in "${!MODEL_PARAMS[@]}"; do
+                                local repo=$(get_profile_data "$p" | cut -d'|' -f2)
+                                if [[ "$rel_path" == *"$repo"* ]]; then
+                                    matched_profile="$p"
+                                    break
+                                fi
+                            done
+                            local desc="${all_descriptions[$i-1]:-}"
+                            if [ -n "$matched_profile" ]; then
+                                desc="$(get_profile_description "$matched_profile")"
+                            else
+                                desc="Custom Model ($rel_path)"
+                            fi
+                            printf "%s) %s - %s\n" "$i" "$name" "$desc"
+                            all_options+=("$matched_profile:-$rel_path")
+                            all_descriptions+=("$desc")
+                            ((i++))
+                        done
+                    fi
+                fi
+
+                # Always show predefined profiles
                 echo ""
-                echo "Available Profiles:"
+                echo "📋 Predefined Profiles:"
+                local offset=$i
                 mapfile -t keys < <(get_all_profiles)
-                i=1
                 for k in "${keys[@]}"; do
                     printf "%s) %s - %s\n" "$i" "$k" "$(get_profile_description "$k")"
+                    all_options+=("$k")
                     ((i++))
                 done
 
-                read -p "Select Profile #: " p_idx
-                sel="${keys[$((p_idx-1))]}"
+                echo ""
+                read -p "Select #: " p_idx
+                local sel="${all_options[$((p_idx-1))]}"
+
+                # If it's a detected path (starts with -), extract the relative path
+                local is_custom=false
+                local hf_repo=""
+                if [[ "$sel" == -* ]]; then
+                    is_custom=true
+                    hf_repo="${sel:1}"
+                    sel="custom-$hf_repo"
+                fi
 
                 default_tp=$(get_default_tp "$sel")
                 read -p "TP size [default $default_tp]: " user_tp
                 tp=$(get_tp_for_launch "$sel" "$user_tp")
 
-                read -p "Max concurrent requests [default 8]: " user_reqs
-                reqs=${user_reqs:-8}
+                read -p "Max concurrent requests [default 16]: " user_reqs
+                reqs=${user_reqs:-16}
 
-                read -p "Memory fraction [0.85]: " mem_frac
-                mem_frac=${mem_frac:-0.85}
+                read -p "Memory fraction [0.90]: " mem_frac
+                mem_frac=${mem_frac:-0.90}
                 # Per-model defaults: MTP models need more VRAM for draft weights
                 if [[ "$sel" == gemma-4-31b ]]; then
                     mem_frac=${mem_frac:-0.78}  # 31B needs more headroom for weights+KV cache
@@ -132,11 +185,11 @@ menu_docker() {
                     mem_frac=${mem_frac:-0.80}  # MTP draft model + KV cache
                 fi
                 # --- Qwen 3.6 Turbo ---
-                # Push memory fraction higher (0.88) since MTP draft weights are efficient
+                # Push memory fraction higher (0.90) since MTP draft weights are efficient
                 if [[ "$sel" == qwen-35b-a3b-bf16 ]]; then
-                    mem_frac=${mem_frac:-0.88}
+                    mem_frac=${mem_frac:-0.90}
                 elif [[ "$sel" == qwen*-*fp8 ]]; then
-                    mem_frac=${mem_frac:-0.85}  # FP8 is more memory efficient
+                    mem_frac=${mem_frac:-0.90}  # FP8 is more memory efficient
                 fi
 
                 read -p "Context length [128000]: " ctx_len
@@ -159,6 +212,11 @@ menu_docker() {
                 # Export API keys for lib_docker.sh to pick up
                 [ -n "$DOCKER_API_KEY" ] && export API_KEY="$DOCKER_API_KEY"
                 [ -n "$DOCKER_ADMIN_API_KEY" ] && export ADMIN_API_KEY="$DOCKER_ADMIN_API_KEY"
+
+                # For custom models, set hf_repo; for predefined, it's already in MODEL_PARAMS
+                if [ "$is_custom" = true ]; then
+                    export CUSTOM_MODEL_REPO="$hf_repo"
+                fi
 
                 docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$reqs"
 

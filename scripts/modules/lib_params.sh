@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_params.sh v12.10 - Qwen FP8 restored. All Qwen MTP standardized to EAGLE.
+# lib_params.sh v12.11 - Aggressive Blackwell defaults (reqs=16, mem=0.90)
 # =============================================================================
 
 declare -A MODEL_PARAMS
@@ -31,6 +31,7 @@ get_profile_description() {
         qwen-35b-a3b-bf16) echo "Qwen3.6 35B-A3B BF16 (MoE) + EAGLE MTP [TURBO]" ;;
         gemma-4-26b-a4b)   echo "Gemma 4 26B-A4B MoE (BF16)" ;;
         gemma-4-31b)       echo "Gemma 4 31B (BF16)" ;;
+        *)                 echo "Custom Model" ;;
     esac
 }
 get_tp_for_launch() { local d; d=$(get_default_tp "$1"); [[ -n "$2" && "$2" =~ ^[0-9]+$ ]] && echo "$2" || echo "$d"; }

@@ -120,6 +120,11 @@ docker_launch_model() {
     local hf_repo
     hf_repo=$(get_profile_data "$profile" | cut -d'|' -f2)
 
+    # For custom/detected models, use CUSTOM_MODEL_REPO if set
+    if [ -z "$hf_repo" ] && [ -n "${CUSTOM_MODEL_REPO:-}" ]; then
+        hf_repo="$CUSTOM_MODEL_REPO"
+    fi
+
     local local_path="$MODELS_DIR/$hf_repo"
 
     if [ ! -d "$local_path" ]; then
@@ -160,7 +165,7 @@ docker_launch_model() {
     fi
 
     local image="lmsysorg/sglang:latest"
-    if [[ "$profile" == gemma* ]]; then
+    if [[ "$profile" == gemma* ]] || [[ "$hf_repo" == google/* ]]; then
         image="lmsysorg/sglang:cu13-gemma4"
     fi
 
@@ -181,9 +186,9 @@ docker_launch_model() {
     fi
 
     # RTX 6000 Blackwell (96GB) budget:
-    # --mem-fraction-static: 0.85 default (optimized for BF16/MoE)
+    # --mem-fraction-static: 0.90 default (aggressive, ~15GB headroom available)
     # Radix cache + CUDA graph enabled by default
-    # max-running-requests: 8 for multi-user team scenarios
+    # max-running-requests: 16 for multi-user team scenarios (aggressive)
     # max-total-tokens: MUST equal ctx_len
     # --allow-auto-truncate: safety net if context overflows
     # NOTE: --enable-piecewise-cuda-graph is deprecated in current SGLang, removed 2026-05-13
