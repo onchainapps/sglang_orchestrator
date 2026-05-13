@@ -56,6 +56,13 @@ docker_launch_model() {
     local port="${6:-30001}"
     local use_fp8="${7:-false}"
 
+    # --- Profile-specific safety overrides (covers both MTP & non-MTP paths) ---
+    if [[ "$profile" == "gemma-4-31b" ]]; then
+        mem_frac=${mem_frac:-0.78}
+        ctx_len=${ctx_len:-32768}
+        tp=${tp:-1}
+    fi
+
     local env_vars
     env_vars=$(get_env_vars "$profile")
     local base_flags
