@@ -76,21 +76,18 @@ venv_launch_model() {
 
     CMD="$PY_EXEC -m sglang.launch_server \
     --model-path \"$MODEL_PATH\" \
-    --mem-fraction-static $MEM \
-    --context-length 262144 \
-    --max-running-requests 16 \
-    --max-total-tokens 131072 \
-    --chunked-prefill-size 8192 \
-    --allow-auto-truncate \
-    --schedule-policy lru \
-    --host 0.0.0.0 \
-    --port $PORT \
     --tp $TP \
-    --disable-cuda-graph \
-    --disable-piecewise-cuda-graph \
-    --disable-radix-cache \
-    --disable-overlap-schedule \
-    $EXTRA_FLAGS"
+    --mem-fraction-static $MEM \
+    --context-length ${CTX:-131072} \
+    --max-running-requests 16 \
+    --max-total-tokens ${MAX_TOKENS:-131072} \
+    --chunked-prefill-size 8192 \
+    --max-prefill-tokens 16384 \
+    --allow-auto-truncate \
+    --schedule-policy lpm \
+    --trust-remote-code \
+    --host 0.0.0.0 \
+    --port $PORT"
 
     [ -n "$REASONING" ] && CMD+=" --reasoning-parser $REASONING"
     [ -n "$TOOLCALL" ] && CMD+=" --tool-call-parser $TOOLCALL"
@@ -101,11 +98,11 @@ venv_launch_model() {
     echo "  Model Path:         $MODEL_PATH"
     echo "  Port:               $PORT"
     echo "  Memory Frac:        $MEM"
-    echo "  Context Length:     262144"
+    echo "  Context Length:     ${CTX:-131072}"
     echo "  Max Running Reqs:   16"
-    echo "  Max Total Tokens:   131072"
+    echo "  Max Total Tokens:   ${MAX_TOKENS:-131072}"
     echo "  Chunked Prefill:    8192"
-    echo "  Schedule Policy:    lru"
+    echo "  Schedule Policy:    lpm"
     echo "  TP Size:            $TP"
     echo "  Reasoning:          ${REASONING:-None}"
     echo "  Tool Call:          ${TOOLCALL:-None}"
