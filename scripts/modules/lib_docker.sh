@@ -89,8 +89,8 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    # Good default for ~5 Hermes agents
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --trust-remote-code --host 0.0.0.0 --port $port --max-running-requests 16 --chunked-prefill-size 8192 --allow-auto-truncate"
+    # Unified launch flags — must match VENV path
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests 16 --max-total-tokens 131072 --chunked-prefill-size 8192 --allow-auto-truncate --trust-remote-code --host 0.0.0.0 --port $port --schedule-policy lru"
 
     if [ "$use_fp8" == "true" ]; then
         full_cmd="$full_cmd --quantization fp8"

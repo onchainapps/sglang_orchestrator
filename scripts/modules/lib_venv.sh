@@ -54,7 +54,7 @@ venv_launch_model() {
     IFS='|' read -r REASONING TOOLCALL EXTRA_FLAGS <<< "$(detect_model_flags "$MODEL_PATH")"
 
     read -p "Port [30001]: " PORT; PORT=${PORT:-30001}
-    read -p "Memory fraction [0.80]: " MEM; MEM=${MEM:-0.80}
+    read -p "Memory fraction [0.82]: " MEM; MEM=${MEM:-0.82}
     read -p "TP size [1]: " TP; TP=${TP:-1}
 
     # Auto-download if model missing
@@ -77,6 +77,12 @@ venv_launch_model() {
     CMD="$PY_EXEC -m sglang.launch_server \
     --model-path \"$MODEL_PATH\" \
     --mem-fraction-static $MEM \
+    --context-length 131072 \
+    --max-running-requests 16 \
+    --max-total-tokens 131072 \
+    --chunked-prefill-size 8192 \
+    --allow-auto-truncate \
+    --schedule-policy lru \
     --host 0.0.0.0 \
     --port $PORT \
     --tp $TP \
@@ -92,13 +98,18 @@ venv_launch_model() {
     echo "------------------------------------------------------------"
     echo "📋 RUNTIME PARAMETERS REVIEW (VENV)"
     echo "------------------------------------------------------------"
-    echo "  Model Path:    $MODEL_PATH"
-    echo "  Port:          $PORT"
-    echo "  Memory Frac:   $MEM"
-    echo "  TP Size:       $TP"
-    echo "  Reasoning:     ${REASONING:-None}"
-    echo "  Tool Call:     ${TOOLCALL:-None}"
-    echo "  Extra Flags:   $EXTRA_FLAGS"
+    echo "  Model Path:         $MODEL_PATH"
+    echo "  Port:               $PORT"
+    echo "  Memory Frac:        $MEM"
+    echo "  Context Length:     131072"
+    echo "  Max Running Reqs:   16"
+    echo "  Max Total Tokens:   131072"
+    echo "  Chunked Prefill:    8192"
+    echo "  Schedule Policy:    lru"
+    echo "  TP Size:            $TP"
+    echo "  Reasoning:          ${REASONING:-None}"
+    echo "  Tool Call:          ${TOOLCALL:-None}"
+    echo "  Extra Flags:        $EXTRA_FLAGS"
     echo "------------------------------------------------------------"
 
     read -p "Proceed with launch? (Y/n): " confirm
