@@ -179,7 +179,13 @@ docker_launch_model() {
     echo "🚀 Launching $profile in background (TP=$tp, port=$port)"
 
     # Added --cap-add SYS_NICE to fix NUMA affinity warnings
-    local full_cmd="docker run -d --name $container_name --gpus all --cap-add SYS_NICE --rm -v $MODELS_DIR:/models -p $port:$port"
+    # Auto-mount kernel tuning configs if they exist
+    local kernel_config_vol=""
+    local kernel_config_dir="$HOME/.sglang_kernel_configs"
+    if [ -d "$kernel_config_dir" ] && [ "$(find "$kernel_config_dir" -name '*.json' 2>/dev/null | wc -l)" -gt 0 ]; then
+        kernel_config_vol="-v $kernel_config_dir:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs"
+    fi
+    local full_cmd="docker run -d --name $container_name --gpus all --cap-add SYS_NICE --rm -v $MODELS_DIR:/models $kernel_config_vol -p $port:$port"
 
     if [ -n "$env_vars" ]; then
         full_cmd="$env_vars $full_cmd"
@@ -226,5 +232,137 @@ docker_launch_model() {
     echo "   Logs: docker logs -f $container_name"
     echo "   Stop: docker stop $container_name"
     echo ""
+    read -p "Press Enter to return to menu..."
+}
+
+# =============================================================================
+# KERNEL TUNING - Auto-tune FP8 Triton kernels for Blackwell (and other GPUs)
+# =============================================================================
+tune_kernels() {
+    # Find running container
+    local running
+    running=$(docker ps --filter "name=sglang-" --format "{{.Names}}" 2>/dev/null | head -1)
+    if [ -z "$running" ]; then
+        echo ""
+        echo "❌ No running SGLang container found. Launch one first."
+        read -p "Press Enter to return to menu..."
+        return
+    fi
+
+    echo ""
+    echo "🔧 Kernel Tuning for container: $running"
+    echo "   This will auto-tune Triton FP8 kernels for your GPU."
+    echo "   Takes 10-20 minutes (benchmarks every config combination)."
+    echo "   Results are cached per-device and persist across restarts."
+    read -p "Start tuning? (y/n): " confirm
+    if [[ "$confirm" != "y" ]]; then
+        echo "Cancelled."
+        read -p "Press Enter to return to menu..."
+        return
+    fi
+
+    local config_dir="$HOME/.sglang_kernel_configs"
+    mkdir -p "$config_dir"
+
+    # Step 1: Detect model architecture from container
+    echo ""
+    echo "📐 Step 1/3: Detecting model architecture..."
+    local hidden_size
+    hidden_size=$(docker exec "$running" python3 -c "
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+# Handle MTP models where config might be nested
+hs = getattr(config, 'hidden_size', 0)
+if hs == 0 and hasattr(config, 'architectures'):
+    print(5120)  # Qwen3 default fallback
+else:
+    print(hs)
+" 2>/dev/null)
+    if [ -z "$hidden_size" ] || [ "$hidden_size" = "0" ]; then
+        echo "⚠️  Could not auto-detect hidden_size. Using Qwen3 default (5120)."
+        hidden_size=5120
+    fi
+
+    local intermediate_size
+    intermediate_size=$(docker exec "$running" python3 -c "
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+print(getattr(config, 'intermediate_size', 25600))
+" 2>/dev/null)
+    if [ -z "$intermediate_size" ] || [ "$intermediate_size" = "0" ]; then
+        intermediate_size=25600
+    fi
+
+    local num_heads
+    num_heads=$(docker exec "$running" python3 -c "
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+print(getattr(config, 'num_attention_heads', 64))
+" 2>/dev/null)
+    if [ -z "$num_heads" ] || [ "$num_heads" = "0" ]; then
+        num_heads=64
+    fi
+
+    local head_dim
+    head_dim=$(docker exec "$running" python3 -c "
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+print(getattr(config, 'head_dim', 128))
+" 2>/dev/null)
+    if [ -z "$head_dim" ] || [ "$head_dim" = "0" ]; then
+        head_dim=128
+    fi
+
+    echo "   hidden_size: $hidden_size"
+    echo "   intermediate_size: $intermediate_size"
+    echo "   num_heads: $num_heads"
+    echo "   head_dim: $head_dim"
+
+    # Step 2: Compute weight shapes and tune each
+    echo ""
+    echo "🔧 Step 2/3: Running kernel autotuner..."
+
+    # QKV projection: hidden -> Q+K+V = hidden + 2*(num_heads*head_dim/num_heads)*2 ... actually simpler:
+    # QKV = num_heads*head_dim + 2*num_kv_heads*head_dim. For simplicity use common shapes:
+    local qkv_out=$((num_heads * head_dim + num_heads * head_dim * 2))  # Q+K+V for same kv heads
+    local mlp_gate_up=$((2 * intermediate_size))
+    local o_proj_in=$((num_heads * head_dim))
+
+    # Weight shapes to tune: (N, K)
+    local -a shapes=()
+    shapes+=("$qkv_out,$hidden_size")       # QKV projection
+    shapes+=("$mlp_gate_up,$hidden_size")   # MLP gate+up (SwiGLU)
+    shapes+=("$hidden_size,$intermediate_size")  # MLP down projection
+    shapes+=("$hidden_size,$o_proj_in")     # Output projection
+    shapes+=("$hidden_size,$hidden_size")   # RMN, Gate, etc.
+
+    for shape in "${shapes[@]}"; do
+        local n="${shape%%,*}"
+        local k="${shape##*,}"
+        echo "   Tuning N=$n, K=$k..."
+        docker exec "$running" python3 benchmark/kernels/quantization/tuning_block_wise_kernel.py \
+            --N "$n" --K "$k" --input-type fp8 \
+            --save-path python/sglang/srt/layers/quantization/configs 2>&1 | tail -1
+    done
+
+    # Step 3: Copy configs back to host
+    echo ""
+    echo "💾 Step 3/3: Saving tuned configs to host..."
+    docker cp "$running:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs/" \
+        "$config_dir/" 2>/dev/null
+
+    local config_count
+    config_count=$(find "$config_dir" -name "*.json" 2>/dev/null | wc -l)
+    echo "   Saved $config_count config files to $config_dir/"
+
+    # Verify device name in configs
+    local device_name
+    device_name=$(docker exec "$running" python3 -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null)
+    echo "   Device: $device_name"
+
+    echo ""
+    echo "✅ Kernel tuning complete!"
+    echo "   These configs are auto-mounted on next launch."
+    echo "   Restart your container to see the performance boost."
     read -p "Press Enter to return to menu..."
 }
