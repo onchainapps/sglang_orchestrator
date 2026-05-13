@@ -105,6 +105,8 @@ docker_launch_model() {
     local ctx_len="${5:-262144}"
     local port="${6:-30001}"
     local use_fp8="${7:-false}"
+    local reqs="${8:-2}"
+    local pg_size="${9:-16}"
 
     # --- Profile-specific safety overrides (covers both MTP & non-MTP paths) ---
     if [[ "$profile" == "gemma-4-31b" ]]; then
@@ -173,7 +175,8 @@ docker_launch_model() {
     echo ""
     echo "🚀 Launching $profile in background (TP=$tp, port=$port)"
 
-    local full_cmd="docker run -d --name $container_name --gpus all --rm -v $MODELS_DIR:/models -p $port:$port"
+    # Added --cap-add SYS_NICE to fix NUMA affinity warnings
+    local full_cmd="docker run -d --name $container_name --gpus all --cap-add SYS_NICE --rm -v $MODELS_DIR:/models -p $port:$port"
 
     if [ -n "$env_vars" ]; then
         full_cmd="$env_vars $full_cmd"
@@ -193,7 +196,7 @@ docker_launch_model() {
         piecewise_graph="--enable-piecewise-cuda-graph"
     fi
 
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests 2 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port $piecewise_graph"
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port $piecewise_graph --page-size $pg_size"
 
     # SGLang API key authentication
     if [ -n "${API_KEY:-}" ]; then

@@ -120,6 +120,12 @@ menu_docker() {
                 read -p "TP size [default $default_tp]: " user_tp
                 tp=$(get_tp_for_launch "$sel" "$user_tp")
 
+                read -p "Max concurrent requests [default 2]: " user_reqs
+                reqs=${user_reqs:-2}
+
+                read -p "Page size [default 16]: " user_pg
+                pg_size=${user_pg:-16}
+
                 read -p "Memory fraction [0.82]: " mem_frac
                 mem_frac=${mem_frac:-0.82}
                 # Per-model defaults: MTP models need more VRAM for draft weights
@@ -163,7 +169,7 @@ menu_docker() {
                 [ -n "$DOCKER_API_KEY" ] && export API_KEY="$DOCKER_API_KEY"
                 [ -n "$DOCKER_ADMIN_API_KEY" ] && export ADMIN_API_KEY="$DOCKER_ADMIN_API_KEY"
 
-                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$use_fp8"
+                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$use_fp8" "$reqs" "$pg_size"
 
                 echo ""
                 echo "Server stopped or exited."
