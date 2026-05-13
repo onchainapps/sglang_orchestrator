@@ -181,7 +181,7 @@ docker_launch_model() {
     # Added --cap-add SYS_NICE to fix NUMA affinity warnings
     # Auto-mount kernel tuning configs if they exist
     local kernel_config_vol=""
-    local kernel_config_dir="$HOME/.sglang_kernel_configs"
+    local kernel_config_dir="$HOME/llms/sglang_kernel_configs"
     if [ -d "$kernel_config_dir" ] && [ "$(find "$kernel_config_dir" -name '*.json' 2>/dev/null | wc -l)" -gt 0 ]; then
         kernel_config_vol="-v $kernel_config_dir:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs"
     fi
@@ -261,7 +261,7 @@ tune_kernels() {
         return
     fi
 
-    local config_dir="$HOME/.sglang_kernel_configs"
+    local config_dir="$HOME/llms/sglang_kernel_configs"
     mkdir -p "$config_dir"
 
     # Step 1: Detect model architecture from container
