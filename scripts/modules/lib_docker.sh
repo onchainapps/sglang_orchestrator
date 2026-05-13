@@ -3,6 +3,10 @@
 # lib_docker.sh v12.13 - Default max-running-requests = 16
 # =============================================================================
 
+MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$MODULE_DIR/lib_params.sh"
+source "$MODULE_DIR/lib_models.sh"
+
 docker_show_status() {
     echo ""
     echo "=== Running SGLang Containers ==="
@@ -33,7 +37,7 @@ docker_launch_model() {
         echo "❌ Model not found locally: $local_path"
         read -p "Download it now? (y/n): " dl
         if [[ "$dl" == "y" ]]; then
-            bash "$SCRIPT_DIR/intelligence.sh" --download "$hf_repo"
+            download_model "$hf_repo"
             read -p "Press Enter after download..."
         else
             return
