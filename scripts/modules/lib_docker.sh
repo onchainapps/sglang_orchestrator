@@ -179,11 +179,25 @@ docker_launch_model() {
     echo "🚀 Launching $profile in background (TP=$tp, port=$port)"
 
     # Added --cap-add SYS_NICE to fix NUMA affinity warnings
-    # Auto-mount kernel tuning configs if they exist
+    # Auto-mount kernel tuning configs if they exist (search orchestrator kernel_configs/)
     local kernel_config_vol=""
-    local kernel_config_dir="$HOME/llms/sglang_kernel_configs"
-    if [ -d "$kernel_config_dir" ] && [ "$(find "$kernel_config_dir" -name '*.json' 2>/dev/null | wc -l)" -gt 0 ]; then
-        kernel_config_vol="-v $kernel_config_dir:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs"
+    local kernel_config_base="$SCRIPT_DIR/../kernel_configs"
+    if [ -d "$kernel_config_base" ]; then
+        # Find the best matching config dir (try device-model, then device, then any)
+        local device_name
+        device_name=$(python3 -c "import torch; print(torch.cuda.get_device_name(0).replace(' ', '_').replace('-', '_'))" 2>/dev/null || echo "unknown_gpu")
+        local config_match=""
+        # Try exact device-model match first
+        if ls "$kernel_config_base/${device_name}"-*.json 2>/dev/null | head -1 > /dev/null; then
+            config_match=$(find "$kernel_config_base" -maxdepth 1 -type d -name "${device_name}-*" 2>/dev/null | head -1)
+        fi
+        # Fallback to any config dir
+        if [ -z "$config_match" ]; then
+            config_match=$(find "$kernel_config_base" -maxdepth 1 -type d 2>/dev/null | head -1)
+        fi
+        if [ -n "$config_match" ] && [ "$(find "$config_match" -name '*.json' 2>/dev/null | wc -l)" -gt 0 ]; then
+            kernel_config_vol="-v $config_match:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs"
+        fi
     fi
     local full_cmd="docker run -d --name $container_name --gpus all --cap-add SYS_NICE --rm -v $MODELS_DIR:/models $kernel_config_vol -p $port:$port"
 
@@ -253,7 +267,7 @@ tune_kernels() {
     echo "🔧 Kernel Tuning for container: $running"
     echo "   This will auto-tune Triton FP8 kernels for your GPU."
     echo "   Takes 10-20 minutes (benchmarks every config combination)."
-    echo "   Results are cached per-device and persist across restarts."
+    echo "   Results are saved to sglang_orchestrator/kernel_configs/ (git-tracked)."
     read -p "Start tuning? (y/n): " confirm
     if [[ "$confirm" != "y" ]]; then
         echo "Cancelled."
@@ -261,7 +275,21 @@ tune_kernels() {
         return
     fi
 
-    local config_dir="$HOME/llms/sglang_kernel_configs"
+    # Detect device and model for config subdirectory naming
+    local device_name
+    device_name=$(docker exec "$running" python3 -c "import torch; print(torch.cuda.get_device_name(0).replace(' ', '_').replace('-', '_'))" 2>/dev/null)
+    local device_slug="${device_name:-unknown_gpu}"
+
+    local model_repo
+    model_repo=$(docker exec "$running" python3 -c "
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+# Try to detect model name from config
+print(getattr(config, 'model_type', 'unknown'))
+" 2>/dev/null)
+    local model_slug="${model_repo:-unknown_model}"
+
+    local config_dir="$SCRIPT_DIR/../kernel_configs/${device_slug}-${model_slug}"
     mkdir -p "$config_dir"
 
     # Step 1: Detect model architecture from container
@@ -271,12 +299,8 @@ tune_kernels() {
     hidden_size=$(docker exec "$running" python3 -c "
 from transformers import AutoConfig
 config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
-# Handle MTP models where config might be nested
-hs = getattr(config, 'hidden_size', 0)
-if hs == 0 and hasattr(config, 'architectures'):
-    print(5120)  # Qwen3 default fallback
-else:
-    print(hs)
+hs = getattr(config, 'hidden_size', 5120)
+print(hs if hs else 5120)
 " 2>/dev/null)
     if [ -z "$hidden_size" ] || [ "$hidden_size" = "0" ]; then
         echo "⚠️  Could not auto-detect hidden_size. Using Qwen3 default (5120)."
@@ -303,6 +327,17 @@ print(getattr(config, 'num_attention_heads', 64))
         num_heads=64
     fi
 
+    local num_kv_heads
+    num_kv_heads=$(docker exec "$running" python3 -c "
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+print(getattr(config, 'num_key_value_heads', None))
+" 2>/dev/null)
+    if [ -z "$num_kv_heads" ] || [ "$num_kv_heads" = "None" ]; then
+        # MHA: num_kv_heads = num_heads
+        num_kv_heads=$num_heads
+    fi
+
     local head_dim
     head_dim=$(docker exec "$running" python3 -c "
 from transformers import AutoConfig
@@ -316,15 +351,15 @@ print(getattr(config, 'head_dim', 128))
     echo "   hidden_size: $hidden_size"
     echo "   intermediate_size: $intermediate_size"
     echo "   num_heads: $num_heads"
+    echo "   num_kv_heads: $num_kv_heads"
     echo "   head_dim: $head_dim"
 
     # Step 2: Compute weight shapes and tune each
     echo ""
     echo "🔧 Step 2/3: Running kernel autotuner..."
 
-    # QKV projection: hidden -> Q+K+V = hidden + 2*(num_heads*head_dim/num_heads)*2 ... actually simpler:
-    # QKV = num_heads*head_dim + 2*num_kv_heads*head_dim. For simplicity use common shapes:
-    local qkv_out=$((num_heads * head_dim + num_heads * head_dim * 2))  # Q+K+V for same kv heads
+    # QKV projection: Q(num_heads*head_dim) + K(num_kv_heads*head_dim) + V(num_kv_heads*head_dim)
+    local qkv_out=$((num_heads * head_dim + 2 * num_kv_heads * head_dim))
     local mlp_gate_up=$((2 * intermediate_size))
     local o_proj_in=$((num_heads * head_dim))
 
@@ -355,15 +390,13 @@ print(getattr(config, 'head_dim', 128))
     local config_count
     config_count=$(find "$config_dir" -name "*.json" 2>/dev/null | wc -l)
     echo "   Saved $config_count config files to $config_dir/"
-
-    # Verify device name in configs
-    local device_name
-    device_name=$(docker exec "$running" python3 -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null)
     echo "   Device: $device_name"
+    echo "   Model: $model_slug"
 
     echo ""
     echo "✅ Kernel tuning complete!"
-    echo "   These configs are auto-mounted on next launch."
-    echo "   Restart your container to see the performance boost."
+    echo "   Configs saved to: $config_dir/"
+    echo "   These are auto-mounted on next launch."
+    echo "   Commit them to git to share across machines."
     read -p "Press Enter to return to menu..."
 }
