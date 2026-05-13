@@ -9,6 +9,12 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+MODELS_DIR="$PROJECT_ROOT/models"
+VENV_DIR="$PROJECT_ROOT/sglang_venv"
+VENV_PYTHON="$VENV_DIR/bin/python"
+LOG_DIR="$PROJECT_ROOT/logs"
+
 source "$SCRIPT_DIR/lib_models.sh"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'

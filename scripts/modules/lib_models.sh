@@ -8,12 +8,9 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-MODELS_DIR="$PROJECT_ROOT/models"
-VENV_DIR="$PROJECT_ROOT/sglang_venv"
-VENV_PYTHON="$VENV_DIR/bin/python"
-LOG_DIR="$PROJECT_ROOT/logs"
+# MODELS_DIR, VENV_DIR, VENV_PYTHON, LOG_DIR must be set by the caller
+# (orchestrator.sh, intelligence.sh, or lib_venv.sh)
 
 # --- Python environment ---
 get_python_env() {
