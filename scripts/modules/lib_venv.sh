@@ -57,6 +57,10 @@ venv_launch_model() {
     read -p "Memory fraction [0.82]: " MEM; MEM=${MEM:-0.82}
     read -p "TP size [1]: " TP; TP=${TP:-1}
 
+    # SGLang API key authentication (--api-key + --admin-api-key)
+    read -p "API key (leave blank to skip): " API_KEY
+    read -p "Admin API key (leave blank to skip): " ADMIN_API_KEY
+
     # Auto-download if model missing
     if [ ! -d "$MODEL_PATH" ] || [ ! -f "$MODEL_PATH/config.json" ]; then
         echo -e "${YELLOW}⚠️  Model path not found or incomplete: $MODEL_PATH${NC}"
@@ -92,6 +96,10 @@ venv_launch_model() {
     [ -n "$REASONING" ] && CMD+=" --reasoning-parser $REASONING"
     [ -n "$TOOLCALL" ] && CMD+=" --tool-call-parser $TOOLCALL"
 
+    # SGLang API key authentication
+    [ -n "$API_KEY" ] && CMD+=" --api-key $API_KEY"
+    [ -n "$ADMIN_API_KEY" ] && CMD+=" --admin-api-key $ADMIN_API_KEY"
+
     echo "------------------------------------------------------------"
     echo "📋 RUNTIME PARAMETERS REVIEW (VENV)"
     echo "------------------------------------------------------------"
@@ -106,6 +114,8 @@ venv_launch_model() {
     echo "  TP Size:            $TP"
     echo "  Reasoning:          ${REASONING:-None}"
     echo "  Tool Call:          ${TOOLCALL:-None}"
+    echo "  API Auth:           $([ -n "$API_KEY" ] && echo 'Enabled (model key)' || echo 'Disabled')"
+    echo "  Admin Auth:         $([ -n "$ADMIN_API_KEY" ] && echo 'Enabled (admin key)' || echo 'Disabled')"
     echo "  Extra Flags:        $EXTRA_FLAGS"
     echo "------------------------------------------------------------"
 

@@ -20,6 +20,76 @@ print_header() {
 }
 
 # =============================================================================
+# PROXY MENU
+# =============================================================================
+menu_proxy() {
+    source "$MODULE_DIR/lib_api.sh"
+    while true; do
+        print_header
+        echo "🌐 [PROXY] - API Exposure & Nginx Management"
+        echo "1) Generate Nginx Config (HTTP proxy only)"
+        echo "2) Full Production Harden (HTTP + SSL + UFW)"
+        echo "3) Audit Nginx Config (validate + report)"
+        echo "4) Monitor Scanner Hits (403 logs)"
+        echo "5) Manage Nginx (test/reload/restart)"
+        echo "6) Back to Main Menu"
+        read -p "Select: " opt
+
+        case $opt in
+            1)
+                read -p "API port [30001]: " port
+                port=${port:-30001}
+                read -p "Domain (leave blank for HTTP): " domain
+                generate_nginx_config "$port" "$domain"
+                echo ""
+                read -p "Press Enter to return to menu..."
+                ;;
+            2)
+                read -p "API port [30001]: " port
+                port=${port:-30001}
+                read -p "Domain (required for SSL): " domain
+                if [ -n "$domain" ]; then
+                    full_harden "$port" "$domain"
+                else
+                    echo ""
+                    echo -e "${RED}❌ Domain is required for SSL+harden mode${NC}"
+                fi
+                echo ""
+                read -p "Press Enter to return to menu..."
+                ;;
+            3)
+                audit_nginx_config
+                echo ""
+                read -p "Press Enter to return to menu..."
+                ;;
+            4)
+                monitor_scanner_hits
+                echo ""
+                read -p "Press Enter to return to menu..."
+                ;;
+            5)
+                echo ""
+                echo "1) Test config syntax"
+                echo "2) Reload (graceful)"
+                echo "3) Restart"
+                read -p "Action [3]: " act
+                act=${act:-3}
+                case $act in
+                    1) manage_nginx test ;;
+                    2) manage_nginx reload ;;
+                    3) manage_nginx restart ;;
+                esac
+                echo ""
+                read -p "Press Enter to return to menu..."
+                ;;
+            6)
+                return
+                ;;
+        esac
+    done
+}
+
+# =============================================================================
 # DOCKER MENU
 # =============================================================================
 menu_docker() {
@@ -59,6 +129,10 @@ menu_docker() {
                 read -p "Port [30001]: " port
                 port=${port:-30001}
 
+                # SGLang API key authentication
+                read -p "API key (leave blank to skip): " DOCKER_API_KEY
+                read -p "Admin API key (leave blank to skip): " DOCKER_ADMIN_API_KEY
+
                 use_fp8="false"
                 if [[ "$sel" == gemma* ]]; then
                     read -p "Use FP8 quantization for Gemma? (y/n): " fp8_in
@@ -67,6 +141,10 @@ menu_docker() {
 
                 read -p "Enable Speculative? (y/n): " mtp_in
                 mtp=$([[ "$mtp_in" == "y" ]] && echo "true" || echo "false")
+
+                # Export API keys for lib_docker.sh to pick up
+                [ -n "$DOCKER_API_KEY" ] && export API_KEY="$DOCKER_API_KEY"
+                [ -n "$DOCKER_ADMIN_API_KEY" ] && export ADMIN_API_KEY="$DOCKER_ADMIN_API_KEY"
 
                 docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$use_fp8"
 
@@ -144,11 +222,13 @@ while true; do
     print_header
     echo "1) Docker Launch"
     echo "2) VENV Launch"
-    echo "3) Exit"
+    echo "3) Proxy & Nginx Management"
+    echo "4) Exit"
     read -p "Select: " main_opt
     case $main_opt in
         1) menu_docker ;;
         2) menu_venv ;;
-        3) exit 0 ;;
+        3) menu_proxy ;;
+        4) exit 0 ;;
     esac
 done

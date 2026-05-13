@@ -99,6 +99,14 @@ docker_launch_model() {
     # so high context-length is safe — actual KV usage capped by mem-fraction.
     full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests 16 --max-total-tokens $((ctx_len / 2)) --chunked-prefill-size 8192 --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port"
 
+    # SGLang API key authentication
+    if [ -n "${API_KEY:-}" ]; then
+        full_cmd="$full_cmd --api-key $API_KEY"
+    fi
+    if [ -n "${ADMIN_API_KEY:-}" ]; then
+        full_cmd="$full_cmd --admin-api-key $ADMIN_API_KEY"
+    fi
+
     if [ "$use_fp8" == "true" ]; then
         full_cmd="$full_cmd --quantization fp8"
     fi
