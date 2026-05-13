@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# lib_docker.sh v12.14 - Optimized for Blackwell (reqs=8, ctx=128000, mem=0.85, page-size removed)
+# lib_docker.sh v12.14 - Blackwell optimized (reqs=8, ctx=128000, mem=0.85)
 # =============================================================================
 
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
