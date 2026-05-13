@@ -10,7 +10,40 @@ source "$MODULE_DIR/lib_models.sh"
 docker_show_status() {
     echo ""
     echo "=== Running SGLang Containers ==="
-    docker ps --filter "name=sglang-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    local containers
+    containers=$(docker ps --filter "name=sglang-" --no-trunc --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}|{{.Command}}")
+    if [ -z "$containers" ]; then
+        echo "No running SGLang containers."
+    else
+        printf "%-12s | %-25s | %-30s | %-20s\n" "NAME" "IMAGE" "PORT" "PARAMS"
+        echo "----------------------------------------------------------------------------------------------------------------------------"
+        echo "$containers" | while IFS='|' read -r cid cname cimage cstatus cports ccmd; do
+            # Extract key params from the command
+            local tp mem ctx port pprefill sched policy mtp spec fp8
+            tp=$(echo "$ccmd" | grep -oP '(?<=--tp )\d+' | head -1)
+            mem=$(echo "$ccmd" | grep -oP '(?<=--mem-fraction-static )\d+\.\d+' | head -1)
+            ctx=$(echo "$ccmd" | grep -oP '(?<=--context-length )\d+' | head -1)
+            port=$(echo "$ccmd" | grep -oP '(?<=--port )\d+' | head -1)
+            pprefill=$(echo "$ccmd" | grep -oP '(?<=--chunked-prefill-size )\d+' | head -1)
+            sched=$(echo "$ccmd" | grep -oP '(?<=--schedule-policy )\w+' | head -1)
+            policy=$(echo "$ccmd" | grep -oP '(?<=--max-running-requests )\d+' | head -1)
+            mtp=$(echo "$ccmd" | grep -qP '(?<=--speculative-algorithm )NEXTN' && echo "MTP" || echo "-")
+            spec=$(echo "$ccmd" | grep -qP '(?<=--speculative-algorithm )EAGLE' && echo "EAGLE" || echo "-")
+            fp8=$(echo "$ccmd" | grep -qP '(?<=--quantization )fp8' && echo "FP8" || echo "-")
+
+            # Build param string
+            local params=""
+            params="TP=$tp mem=$mem ctx=${ctx:-131k}"
+            [ "$policy" != "" ] && params="$params reqs=$policy"
+            [ "$pprefill" != "" ] && params="$params prefill=$pprefill"
+            [ "$sched" != "" ] && params="$params $sched"
+            [ "$mtp" != "-" ] && params="$params MTP"
+            [ "$spec" != "-" ] && params="$params $spec"
+            [ "$fp8" != "-" ] && params="$params $fp8"
+
+            printf "%-12s | %-25s | %-30s | %s\n" "$cname" "$(basename "$cimage" | cut -c1-23)" "$port" "$params"
+        done
+    fi
     echo ""
 }
 
