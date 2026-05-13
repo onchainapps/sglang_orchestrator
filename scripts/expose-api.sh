@@ -51,24 +51,72 @@ check_tool() {
 # --- Module: Nginx Configuration Generator ---
 # Generates a clean HTTP config to let Certbot handle SSL surgery safely
 generate_nginx_config() {
-    print_info "Generating optimized Nginx HTTP configuration..."
+    print_info "Generating hardened Nginx configuration for LLM proxy..."
 
     cat <<EOF | sudo tee $NGINX_CONF_PATH > /dev/null
+# Rate limiting zones
+limit_req_zone \$binary_remote_addr zone=llm_llm:10m rate=30r/m;
+limit_req_zone \$binary_remote_addr zone=llm_read:10m rate=30r/m;
+limit_conn_zone \$binary_remote_addr zone=conn_per_ip:10m;
+
+# Geo block for known scanner patterns
+geo \$block_scanner {
+    default 0;
+    # Block requests targeting common scanner paths
+    ~*wp-content.*\.sql 1;
+    ~*wp-config.*\.bak 1;
+    ~*wp-config.*\.sample 1;
+    ~*\.(sql|sql\.gz|sql\.bz2|sql\.xz|sql\.zip)$ 1;
+    ~*config\.(inc|env|ini|json|yml|yaml)$ 1;
+    ~*config\..*\.bak 1;
+    ~*\.env$ 1;
+    ~*\.git/ 1;
+    ~*\.env\. 1;
+    ~*phpmyadmin 1;
+    ~*\.ini$ 1;
+    ~*\.lock 1;
+    ~*\.lock$ 1;
+    ~*debug 1;
+    ~*console 1;
+    ~*shell 1;
+    ~*\.log$ 1;
+    ~*adminer 1;
+    ~*phpinfo 1;
+}
+
 server {
     listen $WEB_PORT;
     listen [::]:$WEB_PORT;
     server_name $DOMAIN;
 
+    # --- Security Headers ---
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # --- Block scanner paths before they hit SGLang ---
+    if ($block_scanner) {
+        return 403;
+    }
+
+    # --- Connection limits ---
+    limit_conn conn_per_ip 20;
+
+    # --- Rate limit on non-API paths ---
     location / {
+        limit_req zone=llm_read burst=5 nodelay;
+        limit_req zone=llm_llm burst=5 nodelay;
+
         proxy_pass http://$TARGET_IP:$API_PORT;
         proxy_http_version 1.1;
-        
-        # CRITICAL: LLM Streaming Optimizations (Tuned for Gemma 4)
-        proxy_buffering off;              # Disable buffering for real-time streaming
-        proxy_cache off;                  # Disable cache to prevent stale responses
-        proxy_read_timeout 3600s;         # Allow long generation times
+
+        # LLM Streaming Optimizations
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
-        
+
         # Headers
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -90,7 +138,7 @@ EOF
     # Test and Reload
     if sudo nginx -t; then
         sudo systemctl reload nginx
-        print_success "Nginx HTTP configuration applied."
+        print_success "Nginx hardened configuration applied."
     else
         print_error "Nginx config test failed! Check $NGINX_CONF_PATH"
         exit 1
