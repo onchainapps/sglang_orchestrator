@@ -95,7 +95,7 @@ menu_proxy() {
 menu_docker() {
     while true; do
         print_header
-        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 (FP8 + BF16)"
+        echo "🐳 [DOCKER] - Gemma 4 & Qwen3.6 (BF16)"
         echo "1) Launch Profile"
         echo "2) Download Model from HF"
         echo "3) Show Status"
@@ -156,12 +156,6 @@ menu_docker() {
                 read -p "API key (leave blank to skip): " DOCKER_API_KEY
                 read -p "Admin API key (leave blank to skip): " DOCKER_ADMIN_API_KEY
 
-                use_fp8="false"
-                if [[ "$sel" == gemma* ]]; then
-                    read -p "Use FP8 quantization for Gemma? (y/n): " fp8_in
-                    [[ "$fp8_in" == "y" ]] && use_fp8="true"
-                fi
-
                 read -p "Enable Speculative? (y/n): " mtp_in
                 mtp=$([[ "$mtp_in" == "y" ]] && echo "true" || echo "false")
 
@@ -169,7 +163,7 @@ menu_docker() {
                 [ -n "$DOCKER_API_KEY" ] && export API_KEY="$DOCKER_API_KEY"
                 [ -n "$DOCKER_ADMIN_API_KEY" ] && export ADMIN_API_KEY="$DOCKER_ADMIN_API_KEY"
 
-                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$use_fp8" "$reqs" "$pg_size"
+                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$reqs" "$pg_size"
 
                 echo ""
                 echo "Server stopped or exited."

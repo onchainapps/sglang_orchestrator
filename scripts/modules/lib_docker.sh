@@ -104,9 +104,8 @@ docker_launch_model() {
     local tp="${4:-2}"
     local ctx_len="${5:-262144}"
     local port="${6:-30001}"
-    local use_fp8="${7:-false}"
-    local reqs="${8:-2}"
-    local pg_size="${9:-16}"
+    local reqs="${7:-2}"
+    local pg_size="${8:-16}"
 
     # --- Profile-specific safety overrides (covers both MTP & non-MTP paths) ---
     if [[ "$profile" == "gemma-4-31b" ]]; then
@@ -204,10 +203,6 @@ docker_launch_model() {
     fi
     if [ -n "${ADMIN_API_KEY:-}" ]; then
         full_cmd="$full_cmd --admin-api-key $ADMIN_API_KEY"
-    fi
-
-    if [ "$use_fp8" == "true" ]; then
-        full_cmd="$full_cmd --quantization fp8"
     fi
 
     if [ "$mtp" == "true" ]; then
