@@ -17,7 +17,7 @@ source "$MODULE_DIR/lib_models.sh"
 print_header() {
     clear
     echo "============================================================"
-    echo " SGLang Orchestrator v13.0 (Docker + VENV)"
+    echo " SGLang Orchestrator v13.4 (Docker + VENV)"
     echo "============================================================"
 }
 
