@@ -122,6 +122,13 @@ menu_docker() {
 
                 read -p "Memory fraction [0.82]: " mem_frac
                 mem_frac=${mem_frac:-0.82}
+                # Per-model defaults: MTP models need more VRAM for draft weights
+                if [[ "$sel" == gemma* ]]; then
+                    mem_frac=${mem_frac:-0.80}  # MTP draft model + KV cache
+                fi
+                if [[ "$sel" == qwen*-*fp8 ]]; then
+                    mem_frac=${mem_frac:-0.85}  # FP8 is more memory efficient
+                fi
 
                 read -p "Context length [262144]: " ctx_len
                 ctx_len=${ctx_len:-262144}

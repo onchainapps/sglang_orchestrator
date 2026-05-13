@@ -52,7 +52,7 @@ docker_launch_model() {
     local mtp="$2"
     local mem_frac="${3:-0.82}"
     local tp="${4:-2}"
-    local ctx_len="${5:-131072}"
+    local ctx_len="${5:-262144}"
     local port="${6:-30001}"
     local use_fp8="${7:-false}"
 
@@ -122,15 +122,12 @@ docker_launch_model() {
         full_cmd="$env_vars $full_cmd"
     fi
 
-    # Official SGLang defaults:
-    # --mem-fraction-static: 0.9 (auto-calculated if omitted)
-    # --schedule-policy: fcfs (default), lpm better for shared-prefix (coding)
-    # --chunked-prefill-size: None (default), 8192 recommended for long prompts
-    # --max-prefill-tokens: 16384 (default)
-    # --max-total-tokens: must be >= context_length to avoid truncation
-    # Radix cache and CUDA graph are enabled by default (keep enabled)
-    # Context: PagedAttention only allocates slots for loaded tokens,
-    # so high context-length is safe — actual KV usage capped by mem-fraction.
+    # RTX 6000 Ada (96GB) budget:
+    # --mem-fraction-static: 0.85 for FP8/MoE (safe), 0.80 for BF16 dense
+    # Radix cache + CUDA graph enabled by default (keep enabled)
+    # max-running-requests: 2 for single-user coding sessions
+    # max-total-tokens: MUST equal ctx_len — old bug set it to ctx_len/2
+    # --allow-auto-truncate: safety net if context overflows
     full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests 2 --max-total-tokens $ctx_len --chunked-prefill-size 8192 --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port"
 
     # SGLang API key authentication

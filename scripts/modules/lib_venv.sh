@@ -82,9 +82,9 @@ venv_launch_model() {
     --model-path \"$MODEL_PATH\" \
     --tp $TP \
     --mem-fraction-static $MEM \
-    --context-length ${CTX:-131072} \
-    --max-running-requests 16 \
-    --max-total-tokens ${MAX_TOKENS:-131072} \
+    --context-length ${CTX:-262144} \
+    --max-running-requests 2 \
+    --max-total-tokens ${CTX:-262144} \
     --chunked-prefill-size 8192 \
     --max-prefill-tokens 16384 \
     --allow-auto-truncate \
@@ -106,9 +106,9 @@ venv_launch_model() {
     echo "  Model Path:         $MODEL_PATH"
     echo "  Port:               $PORT"
     echo "  Memory Frac:        $MEM"
-    echo "  Context Length:     ${CTX:-131072}"
-    echo "  Max Running Reqs:   16"
-    echo "  Max Total Tokens:   ${MAX_TOKENS:-131072}"
+    echo "  Context Length:     ${CTX:-262144}"
+    echo "  Max Running Reqs:   2"
+    echo "  Max Total Tokens:   ${CTX:-262144}"
     echo "  Chunked Prefill:    8192"
     echo "  Schedule Policy:    lpm"
     echo "  TP Size:            $TP"
