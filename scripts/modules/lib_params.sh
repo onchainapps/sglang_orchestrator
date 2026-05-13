@@ -12,7 +12,7 @@ MODEL_PARAMS["qwen-35b-a3b-fp8"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-A3B-FP
 
 # Qwen3.6 - BF16 versions (separate downloads)
 MODEL_PARAMS["qwen-27b-bf16"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-27B|1||--reasoning-parser qwen3 --tool-call-parser qwen3_coder"
-MODEL_PARAMS["qwen-35b-a3b-bf16"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-A3B|2||--reasoning-parser qwen3 --tool-call-parser qwen3_coder"
+MODEL_PARAMS["qwen-35b-a3b-bf16"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-A3B|1|SGLANG_ENABLE_SPEC_V2=1|--reasoning-parser qwen3 --tool-call-parser qwen3_coder --speculative-algorithm NEXTN --speculative-num-steps 8 --speculative-num-draft-tokens 8 --chunked-prefill-size 16384"
 
 # Gemma 4
 MODEL_PARAMS["gemma-4-26b-a4b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-26B-A4B-it|2||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 5 --speculative-num-draft-tokens 6 --speculative-eagle-topk 1"
@@ -28,7 +28,7 @@ get_profile_description() {
         qwen-27b-fp8)      echo "Qwen3.6 27B FP8 + EAGLE + Spec V2" ;;
         qwen-35b-a3b-fp8)  echo "Qwen3.6 35B-A3B MoE FP8 + EAGLE" ;;
         qwen-27b-bf16)     echo "Qwen3.6 27B BF16 (Dense)" ;;
-        qwen-35b-a3b-bf16) echo "Qwen3.6 35B-A3B BF16 (MoE)" ;;
+        qwen-35b-a3b-bf16) echo "Qwen3.6 35B-A3B BF16 (MoE) [TURBO MODE]" ;;
         gemma-4-26b-a4b)   echo "Gemma 4 26B-A4B MoE + MTP (NEXTN)" ;;
         gemma-4-31b)       echo "Gemma 4 31B + MTP (NEXTN)" ;;
     esac

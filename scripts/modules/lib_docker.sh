@@ -135,7 +135,15 @@ docker_launch_model() {
     # max-running-requests: 2 for single-user coding sessions
     # max-total-tokens: MUST equal ctx_len — old bug set it to ctx_len/2
     # --allow-auto-truncate: safety net if context overflows
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests 2 --max-total-tokens $ctx_len --chunked-prefill-size 8192 --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port"
+    # --- TURBO MODE FOR QWEN 35B ---
+    local chunk_size=8192
+    local piecewise_graph="--disable-piecewise-cuda-graph"
+    if [[ "$profile" == "qwen-35b-a3b-bf16" ]]; then
+        chunk_size=16384
+        piecewise_graph="--enable-piecewise-cuda-graph"
+    fi
+
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests 2 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port $piecewise_graph"
 
     # SGLang API key authentication
     if [ -n "${API_KEY:-}" ]; then

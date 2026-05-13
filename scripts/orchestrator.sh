@@ -128,7 +128,11 @@ menu_docker() {
                 elif [[ "$sel" == gemma* ]]; then
                     mem_frac=${mem_frac:-0.80}  # MTP draft model + KV cache
                 fi
-                if [[ "$sel" == qwen*-*fp8 ]]; then
+                # --- Qwen 3.6 Turbo ---
+                # Push memory fraction higher (0.88) since MTP draft weights are efficient
+                if [[ "$sel" == qwen-35b-a3b-bf16 ]]; then
+                    mem_frac=${mem_frac:-0.88}
+                elif [[ "$sel" == qwen*-*fp8 ]]; then
                     mem_frac=${mem_frac:-0.85}  # FP8 is more memory efficient
                 fi
 
