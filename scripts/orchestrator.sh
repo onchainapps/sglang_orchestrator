@@ -123,7 +123,9 @@ menu_docker() {
                 read -p "Memory fraction [0.82]: " mem_frac
                 mem_frac=${mem_frac:-0.82}
                 # Per-model defaults: MTP models need more VRAM for draft weights
-                if [[ "$sel" == gemma* ]]; then
+                if [[ "$sel" == gemma-4-31b ]]; then
+                    mem_frac=${mem_frac:-0.78}  # 31B needs more headroom for weights+KV cache
+                elif [[ "$sel" == gemma* ]]; then
                     mem_frac=${mem_frac:-0.80}  # MTP draft model + KV cache
                 fi
                 if [[ "$sel" == qwen*-*fp8 ]]; then
@@ -132,6 +134,10 @@ menu_docker() {
 
                 read -p "Context length [262144]: " ctx_len
                 ctx_len=${ctx_len:-262144}
+                # 31B sliding window profiler is too conservative (~20K tokens)
+                if [[ "$sel" == gemma-4-31b ]]; then
+                    ctx_len=${ctx_len:-32768}
+                fi
 
                 read -p "Port [30001]: " port
                 port=${port:-30001}

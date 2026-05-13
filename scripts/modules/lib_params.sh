@@ -16,7 +16,7 @@ MODEL_PARAMS["qwen-35b-a3b-bf16"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-A3B|2
 
 # Gemma 4
 MODEL_PARAMS["gemma-4-26b-a4b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-26B-A4B-it|2||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 5 --speculative-num-draft-tokens 6 --speculative-eagle-topk 1"
-MODEL_PARAMS["gemma-4-31b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-31B-it|2||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 5 --speculative-num-draft-tokens 6 --speculative-eagle-topk 1"
+MODEL_PARAMS["gemma-4-31b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-31B-it|1||--reasoning-parser gemma4 --tool-call-parser gemma4 --speculative-algorithm NEXTN --speculative-num-steps 3 --speculative-num-draft-tokens 4"
 
 get_profile_data() { echo "${MODEL_PARAMS[$1]:-}"; }
 get_all_profiles() { for k in "${!MODEL_PARAMS[@]}"; do echo "$k"; done; }
