@@ -297,12 +297,14 @@ while true; do
     echo "1) Docker Launch"
     echo "2) VENV Launch"
     echo "3) Proxy & Nginx Management"
-    echo "4) Exit"
+    echo "4) Dashboard (Textual TUI)"
+    echo "5) Exit"
     read -p "Select: " main_opt
     case $main_opt in
         1) menu_docker ;;
         2) menu_venv ;;
         3) menu_proxy ;;
-        4) exit 0 ;;
+        4) bash "$SCRIPT_DIR/../dashboard/launch.sh" ;;
+        5) exit 0 ;;
     esac
 done

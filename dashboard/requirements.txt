@@ -1,0 +1,5 @@
+# Textual dashboard dependencies
+textual>=0.60.0
+rich>=13.0.0
+httpx>=0.27.0
+docker>=7.0.0
