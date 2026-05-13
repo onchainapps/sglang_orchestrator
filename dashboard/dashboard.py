@@ -78,7 +78,8 @@ class OrchestratorDashboard(App):
                 yield DataTable(id="containers-table")
             
             with TabPane("Logs", id="tab-logs"):
-                yield Static("Select a container:", id="log-selector")
+                yield Static("Select container:", id="log-selector")
+                yield DataTable(id="log-containers-table")
                 yield RichLog(id="log-viewer", wrap=True, markup=True)
             
             with TabPane("Nginx", id="tab-nginx"):
@@ -103,11 +104,18 @@ class OrchestratorDashboard(App):
         nginx_table = self.query_one("#nginx-table", DataTable)
         nginx_table.add_columns("SERVICE", "STATUS", "UPTIME", "CONNECTIONS")
         
+        # Setup log containers table
+        log_table = self.query_one("#log-containers-table", DataTable)
+        log_table.add_columns("CONTAINER", "STATUS", "LINES")
+        
         # Initial data load
         await self.refresh_data()
         
         # Start auto-refresh every 5 seconds
         self.set_interval(5, self.refresh_data)
+        
+        # Start log streaming
+        self.run_worker(self.stream_logs)
 
     async def refresh_data(self) -> None:
         """Refresh dashboard data."""
@@ -120,8 +128,15 @@ class OrchestratorDashboard(App):
             )
             
             if result.returncode == 0 and result.stdout.strip():
+                # Main containers table
                 table = self.query_one("#containers-table", DataTable)
                 table.clear()
+                
+                # Log containers table
+                log_table = self.query_one("#log-containers-table", DataTable)
+                log_table.clear()
+                
+                running_containers = []
                 
                 for line in result.stdout.strip().split("\n"):
                     if not line:
@@ -137,10 +152,23 @@ class OrchestratorDashboard(App):
                             data.get("MemUsage", "N/A"),
                             data.get("RunningFor", "0s")
                         )
+                        
+                        # Add to log containers table if running
+                        if "Up" in data.get("Status", ""):
+                            running_containers.append(data.get("Names"))
+                            log_table.add_row(
+                                data.get("Names"),
+                                "Running",
+                                "Streaming..."
+                            )
                     except json.JSONDecodeError:
                         pass
+                
+                # Stream logs from first running container
+                if running_containers:
+                    await self.stream_container_logs(running_containers[0])
         
-        except Exception as e:
+        except Exception:
             pass
         
         # Update GPU status bar
@@ -148,6 +176,25 @@ class OrchestratorDashboard(App):
         
         # Update nginx status
         await self.update_nginx_status()
+
+    async def stream_container_logs(self, container_name: str) -> None:
+        """Stream logs from a container."""
+        try:
+            result = subprocess.run(
+                ["docker", "logs", "--tail", "50", container_name],
+                capture_output=True, text=True, timeout=5
+            )
+            
+            if result.returncode == 0:
+                log_viewer = self.query_one("#log-viewer", RichLog)
+                log_viewer.clear()
+                for line in result.stdout.strip().split("\n"):
+                    if line:
+                        log_viewer.write_line(line.strip())
+                log_viewer.scroll_end(animate=False)
+                
+        except Exception:
+            pass
 
     async def update_gpu_status(self) -> None:
         """Update GPU status bar."""
