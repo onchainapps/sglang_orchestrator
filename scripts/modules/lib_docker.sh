@@ -9,40 +9,90 @@ source "$MODULE_DIR/lib_models.sh"
 
 docker_show_status() {
     echo ""
-    echo "=== Running SGLang Containers ==="
+    echo "🔍 SGLang Engine Status"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
     local containers
-    containers=$(docker ps --filter "name=sglang-" --no-trunc --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}|{{.Command}}")
+    containers=$(docker ps --filter "name=sglang-" --no-trunc --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}|{{.RunningFor}}|{{.Command}}" 2>/dev/null)
+    
     if [ -z "$containers" ]; then
-        echo "No running SGLang containers."
+        echo ""
+        echo "  ⚠️  No running SGLang containers found."
+        echo ""
     else
-        printf "%-12s | %-25s | %-30s | %-20s\n" "NAME" "IMAGE" "PORT" "PARAMS"
-        echo "----------------------------------------------------------------------------------------------------------------------------"
-        echo "$containers" | while IFS='|' read -r cid cname cimage cstatus cports ccmd; do
-            # Extract key params from the command
-            local tp mem ctx port pprefill sched policy mtp spec fp8
+        # Header
+        printf "  %-30s | %-8s | %-8s | %-8s | %-8s | %-10s | %-30s | %s\n" \
+            "NAME" "STATUS" "VRAM" "CPU" "MEM" "UPTIME" "PORT" "PARAMS"
+        echo "  ─────────────────────────────────────────────────────────────────────────────────"
+        
+        echo "$containers" | while IFS='|' read -r cid cname cimage cstatus cports crunning ccmd; do
+            # Extract params from command
+            local tp mem ctx port pprefill policy chunk piecewise mtp spec fp8
             tp=$(echo "$ccmd" | grep -oP '(?<=--tp )\d+' | head -1)
             mem=$(echo "$ccmd" | grep -oP '(?<=--mem-fraction-static )\d+\.\d+' | head -1)
             ctx=$(echo "$ccmd" | grep -oP '(?<=--context-length )\d+' | head -1)
             port=$(echo "$ccmd" | grep -oP '(?<=--port )\d+' | head -1)
             pprefill=$(echo "$ccmd" | grep -oP '(?<=--chunked-prefill-size )\d+' | head -1)
-            sched=$(echo "$ccmd" | grep -oP '(?<=--schedule-policy )\w+' | head -1)
             policy=$(echo "$ccmd" | grep -oP '(?<=--max-running-requests )\d+' | head -1)
+            chunk=$(echo "$ccmd" | grep -oP '(?<=--chunked-prefill-size )\d+' | head -1)
             mtp=$(echo "$ccmd" | grep -qP '(?<=--speculative-algorithm )NEXTN' && echo "MTP" || echo "-")
             spec=$(echo "$ccmd" | grep -qP '(?<=--speculative-algorithm )EAGLE' && echo "EAGLE" || echo "-")
             fp8=$(echo "$ccmd" | grep -qP '(?<=--quantization )fp8' && echo "FP8" || echo "-")
-
+            piecewise=$(echo "$ccmd" | grep -qP '--enable-piecewise-cuda-graph' && echo "PW" || echo "-")
+            
+            # Get GPU VRAM usage from nvidia-smi inside container
+            local vram_usage="N/A"
+            if docker exec "$cname" nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | grep -q .; then
+                vram_usage=$(docker exec "$cname" nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+            fi
+            
+            # Get container CPU/MEM stats
+            local cpu_pct mem_mb
+            cpu_pct=$(docker stats --no-stream --format "{{.CPUPerc}}" "$cname" 2>/dev/null | tr -d '% ')
+            mem_mb=$(docker stats --no-stream --format "{{.MemUsage}}" "$cname" 2>/dev/null | cut -d'/' -f1 | tr -d ' ')
+            
+            # Format uptime
+            local uptime_str="$crunning"
+            [ ${#uptime_str} -gt 10 ] && uptime_str="${uptime_str:0:10}..."
+            
             # Build param string
             local params=""
-            params="TP=$tp mem=$mem ctx=${ctx:-131k}"
+            params="TP=$tp mem=${mem:-0.82} ctx=${ctx:-131k}"
             [ "$policy" != "" ] && params="$params reqs=$policy"
-            [ "$pprefill" != "" ] && params="$params prefill=$pprefill"
-            [ "$sched" != "" ] && params="$params $sched"
+            [ "$chunk" != "" ] && params="$params chunk=$chunk"
+            [ "$piecewise" != "-" ] && params="$params $piecewise"
             [ "$mtp" != "-" ] && params="$params MTP"
             [ "$spec" != "-" ] && params="$params $spec"
             [ "$fp8" != "-" ] && params="$params $fp8"
-
-            printf "%-12s | %-25s | %-30s | %s\n" "$cname" "$(basename "$cimage" | cut -c1-23)" "$port" "$params"
+            
+            # Truncate name if needed
+            [ ${#cname} -gt 30 ] && cname="${cname:0:27}..."
+            
+            printf "  %-30s | %-8s | %-8sMiB | %-8s%% | %-8s | %-10s | %s | %s\n" \
+                "$cname" "$cstatus" "${vram_usage:-0}" "${cpu_pct:-0}" "${mem_mb:-0}" "$uptime_str" "$port" "$params"
         done
+        
+        echo ""
+        
+        # Try to get live metrics from the API (first running container)
+        echo "📊 Live API Metrics:"
+        echo "  ─────────────────────────────────────────────────────────────────────────────────"
+        local first_port
+        first_port=$(echo "$containers" | head -1 | tr '|' '\n' | grep '\-\>' | grep -oP '0\.0\.0\.0:\K\d+' | head -1)
+        if [ -n "$first_port" ]; then
+            local model_info
+            model_info=$(curl -s --connect-timeout 2 "http://localhost:${first_port}/model_info" 2>/dev/null)
+            if [ $? -eq 0 ] && [ -n "$model_info" ] && echo "$model_info" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if 'model_path' in d else 1)" 2>/dev/null; then
+                local model_path vram_total
+                model_path=$(echo "$model_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('model_path','N/A'))" 2>/dev/null)
+                vram_total=$(echo "$model_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('mem_usage_max_bytes','0') // (1024**2))" 2>/dev/null)
+                echo "  Model: $model_path"
+                echo "  Peak VRAM: ${vram_total:-0} MiB"
+            else
+                echo "  ⚠️  API not responding on port $first_port"
+            fi
+        fi
+        echo "  ─────────────────────────────────────────────────────────────────────────────────"
     fi
     echo ""
 }
