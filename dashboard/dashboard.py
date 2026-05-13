@@ -113,9 +113,6 @@ class OrchestratorDashboard(App):
         
         # Start auto-refresh every 5 seconds
         self.set_interval(5, self.refresh_data)
-        
-        # Start log streaming
-        self.run_worker(self.stream_logs)
 
     async def refresh_data(self) -> None:
         """Refresh dashboard data."""
