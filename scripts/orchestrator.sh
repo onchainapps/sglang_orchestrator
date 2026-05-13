@@ -7,7 +7,8 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-export MODELS_DIR="$PROJECT_ROOT/models"
+# Models live at ~/llms/models/, NOT inside the git repo
+export MODELS_DIR="$HOME/llms/models"
 
 MODULE_DIR="$SCRIPT_DIR/modules"
 source "$MODULE_DIR/lib_params.sh"
