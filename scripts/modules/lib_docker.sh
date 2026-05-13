@@ -186,15 +186,13 @@ docker_launch_model() {
     # max-running-requests: 8 for multi-user team scenarios
     # max-total-tokens: MUST equal ctx_len
     # --allow-auto-truncate: safety net if context overflows
-    # --- TURBO MODE FOR QWEN 35B BF16 & 27B FP8 ---
+    # NOTE: --enable-piecewise-cuda-graph is deprecated in current SGLang, removed 2026-05-13
     local chunk_size=8192
-    local piecewise_graph="--disable-piecewise-cuda-graph"
     if [[ "$profile" == "qwen-35b-a3b-bf16" || "$profile" == "qwen-27b-fp8" ]]; then
         chunk_size=16384
-        piecewise_graph="--enable-piecewise-cuda-graph"
     fi
 
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port $piecewise_graph"
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port"
 
     # SGLang API key authentication
     if [ -n "${API_KEY:-}" ]; then
