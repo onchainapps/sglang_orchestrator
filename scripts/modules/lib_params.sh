@@ -20,9 +20,9 @@ MODEL_PARAMS["gemma-4-31b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-31B-it|1
 
 get_profile_data() { echo "${MODEL_PARAMS[$1]:-}"; }
 get_all_profiles() { for k in "${!MODEL_PARAMS[@]}"; do echo "$k"; done; }
-get_default_tp() { IFS='|' read -r _ _ tp _ _ <<< "${MODEL_PARAMS[$1]}"; echo "$tp"; }
-get_env_vars() { IFS='|' read -r _ _ _ env _ <<< "${MODEL_PARAMS[$1]}"; echo "$env"; }
-get_base_flags() { IFS='|' read -r _ _ _ _ flags <<< "${MODEL_PARAMS[$1]}"; echo "$flags"; }
+get_default_tp() { IFS='|' read -r _ _ tp _ _ <<< "${MODEL_PARAMS[$1]:-}"; echo "${tp:-1}"; }
+get_env_vars() { IFS='|' read -r _ _ _ env _ <<< "${MODEL_PARAMS[$1]:-}"; echo "${env:-}"; }
+get_base_flags() { IFS='|' read -r _ _ _ _ flags <<< "${MODEL_PARAMS[$1]:-}"; echo "${flags:-}"; }
 get_profile_description() {
     case $1 in
         qwen-27b-fp8)      echo "Qwen3.6 27B FP8 + EAGLE MTP" ;;
