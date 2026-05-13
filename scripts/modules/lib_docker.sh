@@ -342,7 +342,8 @@ print(getattr(config, 'head_dim', 128))
         echo "   Tuning N=$n, K=$k..."
         docker exec "$running" python3 benchmark/kernels/quantization/tuning_block_wise_kernel.py \
             --N "$n" --K "$k" --input-type fp8 \
-            --save-path python/sglang/srt/layers/quantization/configs 2>&1 | tail -1
+            --save-path python/sglang/srt/layers/quantization/configs 2>&1
+        echo ""
     done
 
     # Step 3: Copy configs back to host
