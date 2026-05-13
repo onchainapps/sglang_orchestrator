@@ -186,10 +186,10 @@ docker_launch_model() {
     # max-running-requests: 8 for multi-user team scenarios
     # max-total-tokens: MUST equal ctx_len
     # --allow-auto-truncate: safety net if context overflows
-    # --- TURBO MODE FOR QWEN 35B ---
+    # --- TURBO MODE FOR QWEN 35B BF16 & 27B FP8 ---
     local chunk_size=8192
     local piecewise_graph="--disable-piecewise-cuda-graph"
-    if [[ "$profile" == "qwen-35b-a3b-bf16" ]]; then
+    if [[ "$profile" == "qwen-35b-a3b-bf16" || "$profile" == "qwen-27b-fp8" ]]; then
         chunk_size=16384
         piecewise_graph="--enable-piecewise-cuda-graph"
     fi
