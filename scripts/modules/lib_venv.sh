@@ -9,11 +9,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-MODELS_DIR="$PROJECT_ROOT/models"
-VENV_DIR="$PROJECT_ROOT/sglang_venv"
+MODELS_DIR="$HOME/llms/models"
+VENV_DIR="$HOME/llms/sglang_venv"
 VENV_PYTHON="$VENV_DIR/bin/python"
-LOG_DIR="$PROJECT_ROOT/logs"
+LOG_DIR="$HOME/llms/sglang_orchestrator/logs"
 
 source "$SCRIPT_DIR/lib_models.sh"
 
