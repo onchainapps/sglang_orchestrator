@@ -292,60 +292,45 @@ print(getattr(config, 'model_type', 'unknown'))
     local config_dir="$SCRIPT_DIR/../kernel_configs/${device_slug}-${model_slug}"
     mkdir -p "$config_dir"
 
-    # Step 1: Detect model architecture from container
+    # Step 1: Detect model architecture from container (single pass, handles nested configs)
     echo ""
     echo "📐 Step 1/3: Detecting model architecture..."
-    local hidden_size
-    hidden_size=$(docker exec "$running" python3 -c "
+    local arch_output
+    arch_output=$(docker exec "$running" python3 -c "
 from transformers import AutoConfig
+import json
 config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
-hs = getattr(config, 'hidden_size', 5120)
-print(hs if hs else 5120)
-" 2>/dev/null)
-    if [ -z "$hidden_size" ] || [ "$hidden_size" = "0" ]; then
-        echo "⚠️  Could not auto-detect hidden_size. Using Qwen3 default (5120)."
+# qwen3_5 nests text config under text_config; fallback to top-level for older models
+tc = getattr(config, 'text_config', config)
+print(json.dumps({
+    'hidden_size': tc.hidden_size,
+    'intermediate_size': tc.intermediate_size,
+    'num_attention_heads': tc.num_attention_heads,
+    'num_key_value_heads': getattr(tc, 'num_key_value_heads', None),
+    'head_dim': tc.head_dim,
+}))
+" 2>&1)
+    local parse_err
+    parse_err=$(echo "$arch_output" | grep -i "error\|exception\|traceback" || true)
+    if [ -z "$parse_err" ]; then
+        hidden_size=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['hidden_size'])" 2>/dev/null)
+        intermediate_size=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['intermediate_size'])" 2>/dev/null)
+        num_heads=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['num_attention_heads'])" 2>/dev/null)
+        num_kv_heads=$(echo "$arch_output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['num_key_value_heads'] or '')" 2>/dev/null)
+        head_dim=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['head_dim'])" 2>/dev/null)
+    else
+        echo "⚠️  Could not auto-detect architecture. Error: $(echo "$arch_output" | head -2)"
+        echo "   Falling back to default params. Output:"
+        echo "$arch_output" | head -5 | sed 's/^/   /'
         hidden_size=5120
+        intermediate_size=17408
+        num_heads=24
+        num_kv_heads=4
+        head_dim=256
     fi
-
-    local intermediate_size
-    intermediate_size=$(docker exec "$running" python3 -c "
-from transformers import AutoConfig
-config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
-print(getattr(config, 'intermediate_size', 25600))
-" 2>/dev/null)
-    if [ -z "$intermediate_size" ] || [ "$intermediate_size" = "0" ]; then
-        intermediate_size=25600
-    fi
-
-    local num_heads
-    num_heads=$(docker exec "$running" python3 -c "
-from transformers import AutoConfig
-config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
-print(getattr(config, 'num_attention_heads', 64))
-" 2>/dev/null)
-    if [ -z "$num_heads" ] || [ "$num_heads" = "0" ]; then
-        num_heads=64
-    fi
-
-    local num_kv_heads
-    num_kv_heads=$(docker exec "$running" python3 -c "
-from transformers import AutoConfig
-config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
-print(getattr(config, 'num_key_value_heads', None))
-" 2>/dev/null)
-    if [ -z "$num_kv_heads" ] || [ "$num_kv_heads" = "None" ]; then
+    if [ -z "$num_kv_heads" ] || [ "$num_kv_heads" = "" ]; then
         # MHA: num_kv_heads = num_heads
         num_kv_heads=$num_heads
-    fi
-
-    local head_dim
-    head_dim=$(docker exec "$running" python3 -c "
-from transformers import AutoConfig
-config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
-print(getattr(config, 'head_dim', 128))
-" 2>/dev/null)
-    if [ -z "$head_dim" ] || [ "$head_dim" = "0" ]; then
-        head_dim=128
     fi
 
     echo "   hidden_size: $hidden_size"
