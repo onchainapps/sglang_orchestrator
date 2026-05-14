@@ -298,7 +298,7 @@ print(getattr(config, 'model_type', 'unknown'))
 " 2>/dev/null)
     local model_slug="${model_repo:-unknown_model}"
 
-    local config_dir="$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs/${device_slug}-${model_slug}"
+    local config_dir="$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs"
     mkdir -p "$config_dir"
 
     # Step 1: Detect model architecture from container (single pass, handles nested configs)
