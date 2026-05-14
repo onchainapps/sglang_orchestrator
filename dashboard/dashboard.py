@@ -241,19 +241,19 @@ class OrchestratorDashboard(App):
         """Toggle logs visibility."""
         tabbed = self.query_one("#main-tabs", TabbedContent)
         if tabbed.active_pane and tabbed.active_pane.id == "tab-containers":
-            tabbed.active = "Logs"
+            tabbed.active = "tab-logs"
         else:
-            tabbed.active = "Containers"
+            tabbed.active = "tab-containers"
 
     def action_nginx_status(self) -> None:
         """Switch to nginx tab."""
         tabbed = self.query_one("#main-tabs", TabbedContent)
-        tabbed.active = "Nginx"
+        tabbed.active = "tab-nginx"
 
     def action_kernel_tuning(self) -> None:
         """Switch to kernel tuning tab."""
         tabbed = self.query_one("#main-tabs", TabbedContent)
-        tabbed.active = "Kernel Tuning"
+        tabbed.active = "tab-kernel"
 
 
 if __name__ == "__main__":
