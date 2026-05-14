@@ -416,15 +416,18 @@ print(json.dumps({
         mtp_has_dedicated_config=true
     fi
     if [ "$mtp_layers" -gt 0 ] 2>/dev/null && [ -n "$mtp_intermediate_size" ] && [ "$mtp_intermediate_size" != "" ]; then
-        local mtp_qkv_out=$((mtp_heads * mtp_head_dim + 2 * mtp_kv_heads * mtp_head_dim))
+        local mtp_q_out=$((mtp_heads * mtp_head_dim))              # MTP Q projection (separate)
+        local mtp_kv_out=$((2 * mtp_kv_heads * mtp_head_dim))     # MTP KV projection (separate)
         local mtp_mlp_gate_up=$((2 * mtp_intermediate_size))
         local mtp_o_proj_in=$((mtp_heads * mtp_head_dim))
 
-        shapes+=("$mtp_qkv_out,$hidden_size")        # MTP QKV projection
+        shapes+=("$mtp_q_out,$hidden_size")           # MTP Q projection
+        shapes+=("$mtp_kv_out,$hidden_size")          # MTP KV projection
         shapes+=("$mtp_mlp_gate_up,$hidden_size")    # MTP MLP gate+up (SwiGLU)
         shapes+=("$hidden_size,$mtp_intermediate_size")  # MTP MLP down projection
         shapes+=("$hidden_size,$mtp_o_proj_in")     # MTP Output projection
-        echo "   MTP QKV: N=$mtp_qkv_out, K=$hidden_size"
+        echo "   MTP Q: N=$mtp_q_out, K=$hidden_size"
+        echo "   MTP KV: N=$mtp_kv_out, K=$hidden_size"
         echo "   MTP MLP: N=$mtp_mlp_gate_up, K=$hidden_size"
         if [ "$mtp_has_dedicated_config" = false ]; then
             echo "   (MTP shares main model architecture — no additional shapes to tune)"
