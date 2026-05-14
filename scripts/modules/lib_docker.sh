@@ -181,7 +181,7 @@ docker_launch_model() {
     # Added --cap-add SYS_NICE to fix NUMA affinity warnings
     # Auto-mount kernel tuning configs if they exist (search orchestrator kernel_configs/)
     local kernel_config_vol=""
-    local kernel_config_base="$SCRIPT_DIR/../kernel_configs"
+    local kernel_config_base="$(dirname "$SCRIPT_DIR")/kernel_configs"
     if [ -d "$kernel_config_base" ]; then
         # Find the best matching config dir (try device-model, then device, then any)
         local device_name
