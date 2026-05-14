@@ -81,6 +81,7 @@ venv_launch_model() {
     --mem-fraction-static $MEM \
     --context-length ${CTX:-262144} \
     --max-running-requests 2 \
+    --max-queued-requests 8 \
     --max-total-tokens ${CTX:-262144} \
     --chunked-prefill-size 8192 \
     --max-prefill-tokens 16384 \
@@ -105,6 +106,7 @@ venv_launch_model() {
     echo "  Memory Frac:        $MEM"
     echo "  Context Length:     ${CTX:-262144}"
     echo "  Max Running Reqs:   2"
+    echo "  Max Queued Reqs:    8"
     echo "  Max Total Tokens:   ${CTX:-262144}"
     echo "  Chunked Prefill:    8192"
     echo "  Schedule Policy:    lpm"

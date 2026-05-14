@@ -125,8 +125,8 @@ menu_docker() {
                 read -p "TP size [default $default_tp]: " user_tp
                 tp=$(get_tp_for_launch "$sel" "$user_tp")
 
-                read -p "Max concurrent requests [default 16]: " user_reqs
-                reqs=${user_reqs:-16}
+                read -p "Max concurrent requests [default 4]: " user_reqs
+                reqs=${user_reqs:-4}
 
                 read -p "Memory fraction [0.90]: " mem_frac
                 mem_frac=${mem_frac:-0.90}

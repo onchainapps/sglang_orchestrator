@@ -84,6 +84,8 @@ select_and_launch() {
     --disable-piecewise-cuda-graph \
     --disable-radix-cache \
     --disable-overlap-schedule \
+    --max-running-requests 2 \
+    --max-queued-requests 8 \
     $EXTRA_FLAGS"
 
     [ -n "$REASONING" ] && CMD+=" --reasoning-parser $REASONING"
