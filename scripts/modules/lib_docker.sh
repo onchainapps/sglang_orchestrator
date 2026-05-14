@@ -376,11 +376,12 @@ print(json.dumps({
         echo ""
     done
 
-    # Step 3: Copy configs back to host
+    # Step 3: Copy configs back to host (replace, don't accumulate)
     echo ""
     echo "💾 Step 3/3: Saving tuned configs to host..."
-    docker cp "$running:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs/" \
-        "$config_dir/" 2>/dev/null
+    # Remove stale configs from previous tuning runs
+    rm -f "$config_dir"/*.json 2>/dev/null
+    docker cp "$running:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs/" \\\n        "$config_dir/" 2>/dev/null
 
     local config_count
     config_count=$(find "$config_dir" -name "*.json" 2>/dev/null | wc -l)
