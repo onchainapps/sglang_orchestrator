@@ -74,19 +74,19 @@ class OrchestratorDashboard(App):
         yield Static("GPU: N/A | VRAM: N/A | Load: N/A", id="status-bar")
         
         with TabbedContent(id="main-tabs"):
-            with TabPane("Containers", id="tab-containers"):
+            with TabPane("Containers"):
                 yield DataTable(id="containers-table")
             
-            with TabPane("Logs", id="tab-logs"):
+            with TabPane("Logs"):
                 yield Static("Select container:", id="log-selector")
                 yield DataTable(id="log-containers-table")
                 yield RichLog(id="log-viewer", wrap=True, markup=True)
             
-            with TabPane("Nginx", id="tab-nginx"):
+            with TabPane("Nginx"):
                 yield DataTable(id="nginx-table")
                 yield RichLog(id="nginx-log", wrap=True)
             
-            with TabPane("Kernel Tuning", id="tab-kernel"):
+            with TabPane("Kernel Tuning"):
                 yield Static("Kernel Tuning Status", id="kernel-status")
                 yield RichLog(id="kernel-log", wrap=True)
         
@@ -240,20 +240,20 @@ class OrchestratorDashboard(App):
     def action_toggle_logs(self) -> None:
         """Toggle logs visibility."""
         tabbed = self.query_one("#main-tabs", TabbedContent)
-        if tabbed.active_pane and tabbed.active_pane.id == "tab-containers":
-            self.call_after_refresh(lambda: setattr(tabbed, "active", "Logs"))
+        if tabbed.active_pane and tabbed.active == "Containers":
+            tabbed.active = "Logs"
         else:
-            self.call_after_refresh(lambda: setattr(tabbed, "active", "Containers"))
+            tabbed.active = "Containers"
 
     def action_nginx_status(self) -> None:
         """Switch to nginx tab."""
         tabbed = self.query_one("#main-tabs", TabbedContent)
-        self.call_after_refresh(lambda: setattr(tabbed, "active", "Nginx"))
+        tabbed.active = "Nginx"
 
     def action_kernel_tuning(self) -> None:
         """Switch to kernel tuning tab."""
         tabbed = self.query_one("#main-tabs", TabbedContent)
-        self.call_after_refresh(lambda: setattr(tabbed, "active", "Kernel Tuning"))
+        tabbed.active = "Kernel Tuning"
 
 
 if __name__ == "__main__":
