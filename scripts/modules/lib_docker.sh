@@ -314,6 +314,9 @@ config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True
 tc = getattr(config, 'text_config', config)
 mtp_layers = getattr(tc, 'mtp_num_hidden_layers', 0)
 mtp_intermediate = getattr(tc, 'mtp_intermediate_size', None)
+# If MTP has no dedicated intermediate_size, it shares main model's
+if mtp_intermediate is None:
+    mtp_intermediate = tc.intermediate_size
 mtp_heads = getattr(tc, 'mtp_num_attention_heads', None)
 mtp_kv_heads = getattr(tc, 'mtp_num_key_value_heads', None)
 mtp_head_dim = getattr(tc, 'mtp_head_dim', None)
@@ -365,8 +368,8 @@ print(json.dumps({
         num_kv_heads=4
         head_dim=256
         mtp_layers=1
-        mtp_intermediate_size=8192
-        mtp_heads=32
+        mtp_intermediate_size=17408
+        mtp_heads=24
         mtp_kv_heads=16
         mtp_head_dim=256
     fi
@@ -406,8 +409,11 @@ print(json.dumps({
     shapes+=("$hidden_size,$hidden_size")   # RMN, Gate, etc.
 
     # MTP shapes (if MTP layers exist)
+    local mtp_has_dedicated_config=false
+    if [ -n "$mtp_intermediate_size" ] && [ "$mtp_intermediate_size" != "$intermediate_size" ] 2>/dev/null; then
+        mtp_has_dedicated_config=true
+    fi
     if [ "$mtp_layers" -gt 0 ] 2>/dev/null && [ -n "$mtp_intermediate_size" ] && [ "$mtp_intermediate_size" != "" ]; then
-        echo "   Detecting MTP shapes..."
         local mtp_qkv_out=$((mtp_heads * mtp_head_dim + 2 * mtp_kv_heads * mtp_head_dim))
         local mtp_mlp_gate_up=$((2 * mtp_intermediate_size))
         local mtp_o_proj_in=$((mtp_heads * mtp_head_dim))
@@ -418,6 +424,9 @@ print(json.dumps({
         shapes+=("$hidden_size,$mtp_o_proj_in")     # MTP Output projection
         echo "   MTP QKV: N=$mtp_qkv_out, K=$hidden_size"
         echo "   MTP MLP: N=$mtp_mlp_gate_up, K=$hidden_size"
+        if [ "$mtp_has_dedicated_config" = false ]; then
+            echo "   (MTP shares main model architecture — no additional shapes to tune)"
+        fi
     fi
 
     # Remove duplicate shapes
@@ -436,6 +445,7 @@ print(json.dumps({
         fi
     done
 
+    local shapes_tuned=0
     for shape in "${unique_shapes[@]}"; do
         local n="${shape%%,*}"
         local k="${shape##*,}"
@@ -446,12 +456,21 @@ print(json.dumps({
             continue
         fi
 
+        shapes_tuned=$((shapes_tuned + 1))
         echo "   Tuning N=$n, K=$k..."
         docker exec "$running" python3 benchmark/kernels/quantization/tuning_block_wise_kernel.py \
             --N "$n" --K "$k" --input-type fp8 \
             --save-path python/sglang/srt/layers/quantization/configs 2>&1
         echo ""
     done
+
+    if [ "$shapes_tuned" -eq 0 ]; then
+        echo ""
+        echo "✅ All weight shapes already tuned — no new configs needed."
+        echo "   Press Enter to return to menu..."
+        read -r
+        return 0
+    fi
 
     # Step 3: Copy configs back to host (replace, don't accumulate)
     echo ""
