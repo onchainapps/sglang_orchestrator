@@ -314,17 +314,19 @@ config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True
 tc = getattr(config, 'text_config', config)
 mtp_layers = getattr(tc, 'mtp_num_hidden_layers', 0)
 mtp_intermediate = getattr(tc, 'mtp_intermediate_size', None)
-# If MTP has no dedicated intermediate_size, it shares main model's
-if mtp_intermediate is None:
-    mtp_intermediate = tc.intermediate_size
 mtp_heads = getattr(tc, 'mtp_num_attention_heads', None)
 mtp_kv_heads = getattr(tc, 'mtp_num_key_value_heads', None)
 mtp_head_dim = getattr(tc, 'mtp_head_dim', None)
-# If MTP has no dedicated config, it shares main model's attention config
+# Qwen3.5 MTP: derive from linear config + known ratios when not explicit
 if mtp_heads is None:
-    mtp_heads = tc.num_attention_heads
+    mtp_heads = getattr(tc, 'linear_num_key_heads', 0) + getattr(tc, 'linear_num_value_heads', 0)
+    if mtp_heads == 0:
+        mtp_heads = tc.num_attention_heads
+if mtp_intermediate is None and mtp_heads > 0:
+    # Qwen3.5 MTP intermediate = mtp_heads * head_dim * 7 / 16
+    mtp_intermediate = int(mtp_heads * tc.head_dim * 7 // 16)
 if mtp_kv_heads is None:
-    mtp_kv_heads = getattr(tc, 'num_key_value_heads', None)
+    mtp_kv_heads = mtp_heads // 8
 if mtp_head_dim is None:
     mtp_head_dim = tc.head_dim
 print(json.dumps({
