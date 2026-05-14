@@ -298,7 +298,7 @@ print(getattr(config, 'model_type', 'unknown'))
 " 2>/dev/null)
     local model_slug="${model_repo:-unknown_model}"
 
-    local config_dir="$SCRIPT_DIR/../kernel_configs/${device_slug}-${model_slug}"
+    local config_dir="$(dirname "$SCRIPT_DIR")/kernel_configs/${device_slug}-${model_slug}"
     mkdir -p "$config_dir"
 
     # Step 1: Detect model architecture from container (single pass, handles nested configs)
@@ -312,12 +312,29 @@ import json
 config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True)
 # qwen3_5 nests text config under text_config; fallback to top-level for older models
 tc = getattr(config, 'text_config', config)
+mtp_layers = getattr(tc, 'mtp_num_hidden_layers', 0)
+mtp_intermediate = getattr(tc, 'mtp_intermediate_size', None)
+mtp_heads = getattr(tc, 'mtp_num_attention_heads', None)
+mtp_kv_heads = getattr(tc, 'mtp_num_key_value_heads', None)
+mtp_head_dim = getattr(tc, 'mtp_head_dim', None)
+# If MTP has no dedicated config, it shares main model's attention config
+if mtp_heads is None:
+    mtp_heads = tc.num_attention_heads
+if mtp_kv_heads is None:
+    mtp_kv_heads = getattr(tc, 'num_key_value_heads', None)
+if mtp_head_dim is None:
+    mtp_head_dim = tc.head_dim
 print(json.dumps({
     'hidden_size': tc.hidden_size,
     'intermediate_size': tc.intermediate_size,
     'num_attention_heads': tc.num_attention_heads,
     'num_key_value_heads': getattr(tc, 'num_key_value_heads', None),
     'head_dim': tc.head_dim,
+    'mtp_layers': mtp_layers,
+    'mtp_intermediate_size': mtp_intermediate,
+    'mtp_num_attention_heads': mtp_heads,
+    'mtp_num_key_value_heads': mtp_kv_heads,
+    'mtp_head_dim': mtp_head_dim,
 }))
 " 2>&1)
     local parse_err
@@ -328,6 +345,16 @@ print(json.dumps({
         num_heads=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['num_attention_heads'])" 2>/dev/null)
         num_kv_heads=$(echo "$arch_output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['num_key_value_heads'] or '')" 2>/dev/null)
         head_dim=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['head_dim'])" 2>/dev/null)
+        local mtp_layers
+        mtp_layers=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['mtp_layers'])" 2>/dev/null)
+        local mtp_intermediate_size
+        mtp_intermediate_size=$(echo "$arch_output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['mtp_intermediate_size'] or '')" 2>/dev/null)
+        local mtp_heads
+        mtp_heads=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['mtp_num_attention_heads'])" 2>/dev/null)
+        local mtp_kv_heads
+        mtp_kv_heads=$(echo "$arch_output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['mtp_num_key_value_heads'] or '')" 2>/dev/null)
+        local mtp_head_dim
+        mtp_head_dim=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['mtp_head_dim'])" 2>/dev/null)
     else
         echo "⚠️  Could not auto-detect architecture. Error: $(echo "$arch_output" | head -2)"
         echo "   Falling back to default params. Output:"
@@ -337,6 +364,11 @@ print(json.dumps({
         num_heads=24
         num_kv_heads=4
         head_dim=256
+        mtp_layers=1
+        mtp_intermediate_size=8192
+        mtp_heads=32
+        mtp_kv_heads=16
+        mtp_head_dim=256
     fi
     if [ -z "$num_kv_heads" ] || [ "$num_kv_heads" = "" ]; then
         # MHA: num_kv_heads = num_heads
@@ -348,6 +380,13 @@ print(json.dumps({
     echo "   num_heads: $num_heads"
     echo "   num_kv_heads: $num_kv_heads"
     echo "   head_dim: $head_dim"
+    if [ "$mtp_layers" -gt 0 ] 2>/dev/null; then
+        echo "   MTP layers: $mtp_layers"
+        echo "   MTP intermediate_size: $mtp_intermediate_size"
+        echo "   MTP num_heads: $mtp_heads"
+        echo "   MTP num_kv_heads: $mtp_kv_heads"
+        echo "   MTP head_dim: $mtp_head_dim"
+    fi
 
     # Step 2: Compute weight shapes and tune each
     echo ""
@@ -366,7 +405,37 @@ print(json.dumps({
     shapes+=("$hidden_size,$o_proj_in")     # Output projection
     shapes+=("$hidden_size,$hidden_size")   # RMN, Gate, etc.
 
+    # MTP shapes (if MTP layers exist)
+    if [ "$mtp_layers" -gt 0 ] 2>/dev/null && [ -n "$mtp_intermediate_size" ] && [ "$mtp_intermediate_size" != "" ]; then
+        echo "   Detecting MTP shapes..."
+        local mtp_qkv_out=$((mtp_heads * mtp_head_dim + 2 * mtp_kv_heads * mtp_head_dim))
+        local mtp_mlp_gate_up=$((2 * mtp_intermediate_size))
+        local mtp_o_proj_in=$((mtp_heads * mtp_head_dim))
+
+        shapes+=("$mtp_qkv_out,$hidden_size")        # MTP QKV projection
+        shapes+=("$mtp_mlp_gate_up,$hidden_size")    # MTP MLP gate+up (SwiGLU)
+        shapes+=("$hidden_size,$mtp_intermediate_size")  # MTP MLP down projection
+        shapes+=("$hidden_size,$mtp_o_proj_in")     # MTP Output projection
+        echo "   MTP QKV: N=$mtp_qkv_out, K=$hidden_size"
+        echo "   MTP MLP: N=$mtp_mlp_gate_up, K=$hidden_size"
+    fi
+
+    # Remove duplicate shapes
+    local -a unique_shapes=()
     for shape in "${shapes[@]}"; do
+        local found=0
+        for unique in "${unique_shapes[@]+${unique_shapes[@]}}"; do
+            if [ "$shape" = "$unique" ]; then
+                found=1
+                break
+            fi
+        done
+        if [ $found -eq 0 ]; then
+            unique_shapes+=("$shape")
+        fi
+    done
+
+    for shape in "${unique_shapes[@]}"; do
         local n="${shape%%,*}"
         local k="${shape##*,}"
         echo "   Tuning N=$n, K=$k..."
@@ -381,8 +450,17 @@ print(json.dumps({
     echo "💾 Step 3/3: Saving tuned configs to host..."
     # Remove stale configs from previous tuning runs
     rm -f "$config_dir"/*.json 2>/dev/null
-    docker cp "$running:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs/" \\\n        "$config_dir/" 2>/dev/null
-
+    rm -rf "$config_dir/configs" 2>/dev/null
+    # docker cp creates a nested 'configs/' dir; flatten it
+    local tmp_cp=$(mktemp -d)
+    docker cp "$running:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs/" \
+        "$tmp_cp/" 2>/dev/null
+    if [ -d "$tmp_cp/configs" ]; then
+        cp "$tmp_cp/configs"/*.json "$config_dir/" 2>/dev/null
+    else
+        cp "$tmp_cp"/*.json "$config_dir/" 2>/dev/null
+    fi
+    rm -rf "$tmp_cp"
     local config_count
     config_count=$(find "$config_dir" -name "*.json" 2>/dev/null | wc -l)
     echo "   Saved $config_count config files to $config_dir/"
