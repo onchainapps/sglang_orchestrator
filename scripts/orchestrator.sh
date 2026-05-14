@@ -7,7 +7,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$SCRIPT_DIR/modules"
-export MODELS_DIR="$HOME/llms/models"
+source "$SCRIPT_DIR/config.sh"
 source "$MODULE_DIR/lib_params.sh"
 source "$MODULE_DIR/lib_docker.sh"
 source "$MODULE_DIR/lib_models.sh"
