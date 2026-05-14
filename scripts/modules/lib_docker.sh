@@ -422,7 +422,7 @@ print(json.dumps({
 
     # Remove duplicate shapes
     local -a unique_shapes=()
-    local root_kernel_dir="$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs"
+    local root_kernel_dir="$(cd "$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs" && pwd)"
     for shape in "${shapes[@]}"; do
         local found=0
         for unique in "${unique_shapes[@]+${unique_shapes[@]}}"; do
@@ -441,7 +441,7 @@ print(json.dumps({
         local k="${shape##*,}"
 
         # Skip if config already exists in root kernel_configs/
-        if ls "$root_kernel_dir/N=${n},K=${k}*.json" 2>/dev/null | head -1 > /dev/null; then
+        if find "$root_kernel_dir" -maxdepth 1 -name "N=${n},K=${k},*.json" -type f 2>/dev/null | head -1 | grep -q .; then
             echo "   Skipping N=$n, K=$k (config exists)"
             continue
         fi
