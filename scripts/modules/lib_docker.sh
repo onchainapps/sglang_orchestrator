@@ -275,6 +275,15 @@ tune_kernels() {
         return
     fi
 
+    # Get the actual model path from the running SGLang process
+    local actual_model_path
+    actual_model_path=$(docker exec "$running" sh -c "ps aux | grep 'sglang serve' | grep -v grep | grep -oP '(?<=--model-path )[^ ]+'" 2>/dev/null)
+    if [ -z "$actual_model_path" ] || [ "$actual_model_path" = "/models" ]; then
+        # Fallback: scan /models for subdirs with config.json
+        actual_model_path=$(docker exec "$running" find /models -maxdepth 2 -name "config.json" 2>/dev/null | head -1 | xargs dirname)
+    fi
+    actual_model_path="${actual_model_path:-/models}"
+
     # Detect device and model for config subdirectory naming
     local device_name
     device_name=$(docker exec "$running" python3 -c "import torch; print(torch.cuda.get_device_name(0).replace(' ', '_').replace('-', '_'))" 2>/dev/null)
@@ -283,7 +292,7 @@ tune_kernels() {
     local model_repo
     model_repo=$(docker exec "$running" python3 -c "
 from transformers import AutoConfig
-config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True)
 # Try to detect model name from config
 print(getattr(config, 'model_type', 'unknown'))
 " 2>/dev/null)
@@ -295,11 +304,12 @@ print(getattr(config, 'model_type', 'unknown'))
     # Step 1: Detect model architecture from container (single pass, handles nested configs)
     echo ""
     echo "📐 Step 1/3: Detecting model architecture..."
+    echo "   Model path: $actual_model_path"
     local arch_output
     arch_output=$(docker exec "$running" python3 -c "
 from transformers import AutoConfig
 import json
-config = AutoConfig.from_pretrained('/models', trust_remote_code=True)
+config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True)
 # qwen3_5 nests text config under text_config; fallback to top-level for older models
 tc = getattr(config, 'text_config', config)
 print(json.dumps({
