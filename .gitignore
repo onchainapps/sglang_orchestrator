@@ -1,0 +1,26 @@
+# Models (live in ~/llms/models, not here)
+models/
+
+# Logs
+logs/
+
+# Config (local secrets, keys, etc)
+config/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Kernel configs (large, GPU-specific — commit selectively)
+kernel_configs/
+!kernel_configs/.gitkeep
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~
