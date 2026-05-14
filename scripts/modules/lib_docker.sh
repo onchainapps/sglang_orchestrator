@@ -438,6 +438,13 @@ print(json.dumps({
     for shape in "${unique_shapes[@]}"; do
         local n="${shape%%,*}"
         local k="${shape##*,}"
+
+        # Skip if config already exists
+        if [ -f "$config_dir/N=${n},K=${k}*.json" ]; then
+            echo "   Skipping N=$n, K=$k (config exists)"
+            continue
+        fi
+
         echo "   Tuning N=$n, K=$k..."
         docker exec "$running" python3 benchmark/kernels/quantization/tuning_block_wise_kernel.py \
             --N "$n" --K "$k" --input-type fp8 \
