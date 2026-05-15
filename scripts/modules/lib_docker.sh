@@ -100,11 +100,27 @@ docker_show_status() {
 docker_launch_model() {
     local profile="$1"
     local mtp="$2"
-    local mem_frac="${3:-0.85}"
-    local tp="${4:-1}"
-    local ctx_len="${5:-128000}"
-    local port="${6:-30001}"
-    local reqs="${7:-8}"
+    local power_mode="${3:-conservative}"  # New: power or conservative
+    local mem_frac="${4:-0.85}"
+    local tp="${5:-1}"
+    local ctx_len="${6:-128000}"
+    local port="${7:-30001}"
+    local reqs="${8:-8}"
+
+    # Apply power profile defaults if not explicitly set
+    if [[ "$power_mode" == "power" ]]; then
+        mem_frac=${mem_frac:-$POWER_MEM_FRAC}
+        reqs=${reqs:-$POWER_REQS}
+        local conservativeness=$POWER_CONSERVATIVENESS
+        local chunk_prefill=$POWER_CHUNK_PREFILL
+        local max_prefill=$POWER_MAX_PREFILL
+    else
+        mem_frac=${mem_frac:-$CONSERVATIVE_MEM_FRAC}
+        reqs=${reqs:-$CONSERVATIVE_REQS}
+        local conservativeness=$CONSERVATIVE_CONSERVATIVENESS
+        local chunk_prefill=$CONSERVATIVE_CHUNK_PREFILL
+        local max_prefill=$CONSERVATIVE_MAX_PREFILL
+    fi
 
     # --- Profile-specific safety overrides (covers both MTP & non-MTP paths) ---
     if [[ "$profile" == "gemma-4-31b" ]]; then
@@ -213,11 +229,13 @@ docker_launch_model() {
     # --allow-auto-truncate: safety net if context overflows
     # NOTE: --enable-piecewise-cuda-graph is deprecated in current SGLang, removed 2026-05-13
     local chunk_size=8192
-    if [[ "$profile" == "qwen-35b-a3b-bf16" || "$profile" == "qwen-27b-fp8" ]]; then
-        chunk_size=16384
+    if [[ "$power_mode" == "power" ]]; then
+        chunk_size=$POWER_CHUNK_PREFILL
+    elif [[ "$profile" == "qwen-35b-a3b-bf16" || "$profile" == "qwen-27b-fp8" ]]; then
+        chunk_size=$CONSERVATIVE_CHUNK_PREFILL
     fi
 
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-queued-requests 8 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 8192 --allow-auto-truncate --schedule-policy lpm --schedule-conservativeness 1.3 --watchdog-timeout 120 --trust-remote-code --host 0.0.0.0 --port $port"
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-queued-requests 8 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens $max_prefill --allow-auto-truncate --schedule-policy lpm --schedule-conservativeness $conservativeness --watchdog-timeout 120 --trust-remote-code --host 0.0.0.0 --port $port"
 
     # SGLang API key authentication
     if [ -n "${API_KEY:-}" ]; then

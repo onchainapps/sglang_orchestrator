@@ -2,6 +2,24 @@
 
 Source: docs.sglang.io (2026-05-12)
 
+## Power Profiles
+
+### Conservative (🛡️)
+Safe defaults, stable, leaves headroom:
+- `--mem-fraction-static`: 0.90
+- `--max-running-requests`: 4
+- `--schedule-conservativeness`: 1.3
+- `--chunked-prefill-size`: 8192
+- `--max-prefill-tokens`: 8192
+
+### Power (🔥)
+Aggressive scheduling, pushes GPU limits:
+- `--mem-fraction-static`: 0.95
+- `--max-running-requests`: 12
+- `--schedule-conservativeness`: 0.8
+- `--chunked-prefill-size`: 32768
+- `--max-prefill-tokens`: 16384
+
 ## Official SGLang Defaults
 
 | Parameter | Default | Description |

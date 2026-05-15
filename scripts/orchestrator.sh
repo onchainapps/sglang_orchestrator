@@ -105,8 +105,21 @@ menu_docker() {
 
         case $opt in
             1)
-                # Show predefined profiles only
+                # Power profile selection
                 echo ""
+                echo "⚡ Select Power Profile:"
+                echo "  1) 🛡️  Conservative - Stable defaults, leaves headroom"
+                echo "     (mem=0.90, reqs=4, conservativeness=1.3)"
+                echo "  2) 🔥 Power - Aggressive scheduling, pushes GPU limits"
+                echo "     (mem=0.95, reqs=12, conservativeness=0.8)"
+                read -p "Select [1]: " power_opt
+                power_mode="conservative"
+                [[ "$power_opt" == "2" ]] && power_mode="power"
+                echo ""
+                echo "Selected: $power_mode mode"
+                echo ""
+
+                # Show predefined profiles only
                 echo "📋 Predefined Profiles:"
                 local -a all_options=()
                 local i=1
@@ -125,31 +138,23 @@ menu_docker() {
                 read -p "TP size [default $default_tp]: " user_tp
                 tp=$(get_tp_for_launch "$sel" "$user_tp")
 
-                read -p "Max concurrent requests [default 4]: " user_reqs
-                reqs=${user_reqs:-4}
-
-                read -p "Memory fraction [0.90]: " mem_frac
-                mem_frac=${mem_frac:-0.90}
-                # Per-model defaults: MTP models need more VRAM for draft weights
-                if [[ "$sel" == gemma-4-31b ]]; then
-                    mem_frac=${mem_frac:-0.78}  # 31B needs more headroom for weights+KV cache
-                elif [[ "$sel" == gemma* ]]; then
-                    mem_frac=${mem_frac:-0.80}  # MTP draft model + KV cache
+                # Apply profile defaults
+                if [[ "$power_mode" == "power" ]]; then
+                    read -p "Memory fraction [${POWER_MEM_FRAC}]: " mem_frac
+                    mem_frac=${mem_frac:-$POWER_MEM_FRAC}
+                else
+                    read -p "Memory fraction [${CONSERVATIVE_MEM_FRAC}]: " mem_frac
+                    mem_frac=${mem_frac:-$CONSERVATIVE_MEM_FRAC}
                 fi
-                # --- Qwen 3.6 Turbo ---
-                # Push memory fraction higher (0.90) since MTP draft weights are efficient
-                if [[ "$sel" == qwen-35b-a3b-bf16 ]]; then
-                    mem_frac=${mem_frac:-0.90}
-                elif [[ "$sel" == qwen*-*fp8 ]]; then
-                    mem_frac=${mem_frac:-0.90}  # FP8 is more memory efficient
+                read -p "Max concurrent requests [$(if [[ "$power_mode" == "power" ]]; then echo "$POWER_REQS"; else echo "$CONSERVATIVE_REQS"; fi)]: " user_reqs
+                if [[ "$power_mode" == "power" ]]; then
+                    reqs=${user_reqs:-$POWER_REQS}
+                else
+                    reqs=${user_reqs:-$CONSERVATIVE_REQS}
                 fi
 
-                read -p "Context length [128000]: " ctx_len
-                ctx_len=${ctx_len:-128000}
-                # 31B sliding window profiler is too conservative (~20K tokens)
-                if [[ "$sel" == gemma-4-31b ]]; then
-                    ctx_len=${ctx_len:-32768}
-                fi
+                read -p "Context length [262111]: " ctx_len
+                ctx_len=${ctx_len:-262111}
 
                 read -p "Port [30001]: " port
                 port=${port:-30001}
@@ -165,7 +170,17 @@ menu_docker() {
                 [ -n "$DOCKER_API_KEY" ] && export API_KEY="$DOCKER_API_KEY"
                 [ -n "$DOCKER_ADMIN_API_KEY" ] && export ADMIN_API_KEY="$DOCKER_ADMIN_API_KEY"
 
-                docker_launch_model "$sel" "$mtp" "$mem_frac" "$tp" "$ctx_len" "$port" "$reqs"
+                echo ""
+                echo "🚀 Launching in $power_mode mode..."
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo "  Memory fraction: $mem_frac"
+                echo "  Max requests: $reqs"
+                echo "  Schedule conservativeness: $(if [[ "$power_mode" == "power" ]]; then echo "$POWER_CONSERVATIVENESS"; else echo "$CONSERVATIVE_CONSERVATIVENESS"; fi)"
+                echo "  Chunked prefill: $(if [[ "$power_mode" == "power" ]]; then echo "$POWER_CHUNK_PREFILL"; else echo "$CONSERVATIVE_CHUNK_PREFILL"; fi)"
+                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                echo ""
+
+                docker_launch_model "$sel" "$mtp" "$power_mode" "$mem_frac" "$tp" "$ctx_len" "$port" "$reqs"
 
                 echo ""
                 echo "Server stopped or exited."
