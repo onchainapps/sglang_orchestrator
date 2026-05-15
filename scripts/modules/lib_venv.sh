@@ -84,9 +84,11 @@ venv_launch_model() {
     --max-queued-requests 8 \
     --max-total-tokens ${CTX:-262144} \
     --chunked-prefill-size 8192 \
-    --max-prefill-tokens 16384 \
+    --max-prefill-tokens 8192 \
     --allow-auto-truncate \
     --schedule-policy lpm \
+    --schedule-conservativeness 1.3 \
+    --watchdog-timeout 120 \
     --trust-remote-code \
     --host 0.0.0.0 \
     --port $PORT"

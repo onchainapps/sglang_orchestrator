@@ -199,7 +199,7 @@ docker_launch_model() {
             kernel_config_vol="-v $config_match:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs"
         fi
     fi
-    local full_cmd="docker run -d --name $container_name --gpus all --cap-add SYS_NICE --rm -v $MODELS_DIR:/models $kernel_config_vol -p $port:$port"
+    local full_cmd="docker run -d --name $container_name --restart unless-stopped --gpus all --cap-add SYS_NICE --rm -v $MODELS_DIR:/models $kernel_config_vol -p $port:$port"
 
     if [ -n "$env_vars" ]; then
         full_cmd="$env_vars $full_cmd"
@@ -217,7 +217,7 @@ docker_launch_model() {
         chunk_size=16384
     fi
 
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-queued-requests 8 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 16384 --allow-auto-truncate --schedule-policy lpm --trust-remote-code --host 0.0.0.0 --port $port"
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-queued-requests 8 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens 8192 --allow-auto-truncate --schedule-policy lpm --schedule-conservativeness 1.3 --watchdog-timeout 120 --trust-remote-code --host 0.0.0.0 --port $port"
 
     # SGLang API key authentication
     if [ -n "${API_KEY:-}" ]; then
