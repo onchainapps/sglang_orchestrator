@@ -97,6 +97,73 @@ docker_show_status() {
     echo ""
 }
 
+# =============================================================================
+# DOCKER IMAGE UPDATE CHECK
+# =============================================================================
+check_docker_updates() {
+    echo ""
+    echo "🔍 Checking for Docker image updates..."
+    echo "─────────────────────────────────────────────────────────────────────"
+
+    # Get local images
+    local local_images
+    local_images=$(docker images lmsysorg/sglang --format "{{.Repository}}:{{.Tag}} - ID: {{.ID}} - Size: {{.Size}}" 2>/dev/null)
+    if [ -z "$local_images" ]; then
+        echo "  ⚠️  No local SGLang images found."
+    else
+        echo "📦 Local Images:"
+        echo "$local_images" | while read -r line; do
+            echo "  $line"
+        done
+    fi
+    echo ""
+
+    # Get Docker Hub latest
+    echo "🌐 Docker Hub (lmsysorg/sglang:latest):"
+    local hub_info
+    hub_info=$(curl -s "https://hub.docker.com/v2/repositories/lmsysorg/sglang/tags/latest" 2>/dev/null)
+    if [ -z "$hub_info" ]; then
+        echo "  ❌ Failed to fetch Docker Hub info."
+        return
+    fi
+
+    local hub_digest hub_size
+    hub_digest=$(echo "$hub_info" | jq -r '.digest // "N/A"' 2>/dev/null)
+    hub_size=$(echo "$hub_info" | jq -r '(.full_size / 1000000000 | floor) + "GB"' 2>/dev/null)
+    echo "  Digest: ${hub_digest}"
+    echo "  Size: ${hub_size}"
+    echo ""
+
+    # Get latest GitHub release
+    echo "📋 GitHub Releases (sgl-project/sglang):"
+    local releases
+    releases=$(curl -s "https://api.github.com/repos/sgl-project/sglang/releases?per_page=3" 2>/dev/null)
+    if [ -z "$releases" ]; then
+        echo "  ❌ Failed to fetch GitHub releases."
+    else
+        echo "$releases" | jq -r '.[:3][] | "  \(.tag_name) - \(.published_at[0:10])"' 2>/dev/null
+    fi
+    echo ""
+
+    # Compare local vs remote for latest tag
+    local local_latest_id
+    local_latest_id=$(docker images lmsysorg/sglang:latest --format "{{.ID}}" 2>/dev/null | head -1)
+    if [ -n "$local_latest_id" ]; then
+        echo "✅ Comparison:"
+        echo "  Local latest ID: ${local_latest_id:0:12}"
+        echo "  Remote digest:   ${hub_digest:0:35}"
+        echo ""
+        echo "💡 To pull latest updates:"
+        echo "  docker pull lmsysorg/sglang:latest"
+        echo ""
+        echo "⚠️  Note: Pulling may update the base image. Test before restarting production containers."
+    else
+        echo "💡 No local 'latest' tag found. Pull with:"
+        echo "  docker pull lmsysorg/sglang:latest"
+    fi
+    echo ""
+}
+
 docker_launch_model() {
     local profile="$1"
     local mtp="$2"

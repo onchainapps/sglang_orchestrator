@@ -99,8 +99,9 @@ menu_docker() {
         echo "1) Launch Profile"
         echo "2) Download Model from HF"
         echo "3) Show Status"
-        echo "4) Kernel Tuning (auto-tune FP8 Triton kernels)"
-        echo "5) Back to Main Menu"
+        echo "4) Check for Docker Image Updates"
+        echo "5) Kernel Tuning (auto-tune FP8 Triton kernels)"
+        echo "6) Back to Main Menu"
         read -p "Select: " opt
 
         case $opt in
@@ -194,8 +195,9 @@ menu_docker() {
                 read -p "Press enter to return to menu..."
                 ;;
             3) docker_show_status; read -p "Press enter to return to menu..." ;;
-            4) tune_kernels ;;
-            5) return ;;
+            4) check_docker_updates; read -p "Press enter to return to menu..." ;;
+            5) tune_kernels ;;
+            6) return ;;
         esac
     done
 }
