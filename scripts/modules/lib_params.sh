@@ -14,9 +14,9 @@ MODEL_PARAMS["qwen-35b-a3b-fp8"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-A3B-FP
 MODEL_PARAMS["qwen-27b-bf16"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-27B|1|SGLANG_ENABLE_SPEC_V2=1|--reasoning-parser qwen3 --tool-call-parser qwen3_coder --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-num-draft-tokens 4 --speculative-eagle-topk 1 --mamba-scheduler-strategy extra_buffer"
 MODEL_PARAMS["qwen-35b-a3b-bf16"]="lmsysorg/sglang:latest|Qwen/Qwen3.6-35B-A3B|1|SGLANG_ENABLE_SPEC_V2=1|--reasoning-parser qwen3 --tool-call-parser qwen3_coder --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-num-draft-tokens 4 --speculative-eagle-topk 1 --mamba-scheduler-strategy extra_buffer "
 
-# Gemma 4 (BF16 only - NO MTP support, remove speculative flags)
-MODEL_PARAMS["gemma-4-26b-a4b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-26B-A4B-it|1||--reasoning-parser gemma4 --tool-call-parser gemma4"
-MODEL_PARAMS["gemma-4-31b"]="lmsysorg/sglang:cu13-gemma4|google/gemma-4-31B-it|1||--reasoning-parser gemma4 --tool-call-parser gemma4"
+# Gemma 4 (unified lmsysorg/sglang:latest - v0.5.12+ has baked-in Gemma 4 support)
+MODEL_PARAMS["gemma-4-26b-a4b"]="lmsysorg/sglang:latest|google/gemma-4-26B-A4B-it|1||--reasoning-parser gemma4 --tool-call-parser gemma4"
+MODEL_PARAMS["gemma-4-31b"]="lmsysorg/sglang:latest|google/gemma-4-31B-it|1||--reasoning-parser gemma4 --tool-call-parser gemma4"
 
 get_profile_data() { echo "${MODEL_PARAMS[$1]:-}"; }
 get_all_profiles() { for k in "${!MODEL_PARAMS[@]}"; do echo "$k"; done; }

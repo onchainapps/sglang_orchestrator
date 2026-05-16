@@ -181,9 +181,6 @@ docker_launch_model() {
     fi
 
     local image="lmsysorg/sglang:latest"
-    if [[ "$profile" == gemma* ]] || [[ "$hf_repo" == google/* ]]; then
-        image="lmsysorg/sglang:cu13-gemma4"
-    fi
 
     local suffix=""
     if [[ "$mtp" == "true" ]]; then
