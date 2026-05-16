@@ -1,8 +1,17 @@
 # SGLang Orchestrator
 
-**Version:** 13.0  
-**Last Updated:** 2026-05-12  
-**Purpose:** Manage SGLang inference engine deployments via Docker or VENV
+**Version:** 13.5  \n**Last Updated:** 2026-05-15  \n**Purpose:** Manage SGLang inference engine deployments via Docker or VENV with production-ready tooling
+
+## Overview
+
+SGLang Orchestrator is a comprehensive management system for deploying and monitoring SGLang inference engines. It provides:
+
+- 🚀 **Docker & VENV launch paths** with parallel, independent workflows
+- 📊 **Real-time dashboard** with container status, logs, and GPU metrics
+- 🔧 **Kernel tuning** with auto-detection and FP8 optimization
+- 🌐 **Production API exposure** with Nginx, SSL, and UFW hardening
+- 📋 **Pre-configured model profiles** for popular LLMs
+- ⚡ **Power profiles** for conservative or aggressive GPU utilization
 
 ## Architecture
 
@@ -48,9 +57,90 @@ orchestrator.sh (TUI)
 
 **Design Principle:** Docker and VENV are parallel, independent paths. They share utilities (`lib_models.sh`) but never cross-pollinate business logic.
 
-## Textual Dashboard
+## Getting Started
 
-The Textual TUI dashboard provides a real-time monitoring interface for SGLang containers, GPU metrics, and proxy status.
+### Prerequisites
+
+- NVIDIA GPU (Blackwell architecture recommended)
+- Docker installed and running
+- Python 3.8+
+- NVIDIA drivers installed
+- SGLang virtual environment (for VENV path)
+
+### Installation
+
+```bash
+cd ~/llms
+git clone https://github.com/onchainapps/sglang_orchestrator.git
+cd sglang_orchestrator
+chmod +x *.sh scripts/*.sh scripts/modules/*.sh
+```
+
+### Launch
+
+```bash
+./scripts/orchestrator.sh
+```
+
+## Usage
+
+### Main Menu
+
+```
+============================================================
+ SGLang Orchestrator v13.5 (Docker + VENV)
+============================================================
+1) Docker Launch
+2) VENV Launch
+3) Proxy & Nginx Management
+4) Dashboard (Textual TUI)
+5) Exit
+```
+
+### Power Profiles
+
+When launching, you'll be prompted to select a power profile:
+
+#### Conservative (🛡️)
+Safe defaults, stable, leaves headroom:
+- `--mem-fraction-static`: 0.90
+- `--max-running-requests`: 4
+- `--schedule-conservativeness`: 1.3
+- `--chunked-prefill-size`: 8192
+- `--max-prefill-tokens`: 8192
+
+#### Power (🔥)
+Aggressive scheduling, pushes GPU limits:
+- `--mem-fraction-static`: 0.95
+- `--max-running-requests`: 12
+- `--schedule-conservativeness`: 0.8
+- `--chunked-prefill-size`: 32768
+- `--max-prefill-tokens`: 16384
+
+### Docker Path
+
+1. Select "Docker Launch" from main menu
+2. Choose power profile (Conservative/Power)
+3. Select model profile
+4. Configure:
+   - TP size (tensor parallelism)
+   - Memory fraction
+   - Max concurrent requests
+   - Context length
+   - Port
+   - API key (optional)
+   - Admin API key (optional)
+   - Enable speculative decoding (y/n)
+5. Server starts in background with logging
+
+### VENV Path
+
+1. Select "VENV Launch" from main menu
+2. Select a model from local scan (or auto-download)
+3. Configure port, memory, TP
+4. Server starts in background with logging
+
+### Dashboard
 
 **Launch from main menu:**
 ```
@@ -80,38 +170,6 @@ bash ~/llms/sglang_orchestrator/dashboard/launch.sh
 
 **Auto-refresh:** Dashboard polls Docker and NVIDIA SMI every 5 seconds.
 
-## Model Profiles
-
-| Profile | Model | TP | Quant | Speculative |
-|---------|-------|----|----|-------------|
-| `qwen-27b-fp8` | Qwen3.6-27B-FP8 | 1 | FP8 | EAGLE + Spec V2 |
-| `qwen-35b-a3b-fp8` | Qwen3.6-35B-A3B-FP8 | 2 | FP8 | EAGLE + Spec V2 |
-| `qwen-27b-bf16` | Qwen3.6-27B | 1 | BF16 | None |
-| `qwen-35b-a3b-bf16` | Qwen3.6-35B-A3B | 2 | BF16 | None |
-| `gemma-4-26b-a4b` | Gemma 4 26B-A4B | 2 | BF16 | NEXTN (MTP) |
-| `gemma-4-31b` | Gemma 4 31B | 2 | BF16 | NEXTN (MTP) |
-
-## Usage
-
-### Main TUI
-```bash
-cd ~/llms/sglang_orchestrator
-chmod +x *.sh
-./scripts/orchestrator.sh
-```
-
-### Docker Path
-1. Select "Docker Launch" from main menu
-2. Choose a profile
-3. Configure TP, memory, context length, port
-4. Enable FP8 (Gemma) and speculative decoding as needed
-
-### VENV Path
-1. Select "VENV Launch" from main menu
-2. Select a model from local scan (or auto-download)
-3. Configure port, memory, TP
-4. Server starts in background with logging
-
 ### Standalone CLI Tools
 
 **Model scan/launch (VENV):**
@@ -135,6 +193,46 @@ chmod +x *.sh
 ./scripts/expose-api.sh --proxy-harden --api-port 30001 --domain example.com  # + SSL + UFW
 ```
 
+## Model Profiles
+
+| Profile | Model | TP | Quant | Speculative |
+|---------|-------|----|-------|-------------|
+| `qwen-27b-fp8` | Qwen3.6-27B-FP8 | 1 | FP8 | EAGLE + Spec V2 |
+| `qwen-35b-a3b-fp8` | Qwen3.6-35B-A3B-FP8 | 1 | FP8 | EAGLE + Spec V2 |
+| `qwen-27b-bf16` | Qwen3.6-27B | 1 | BF16 | None |
+| `qwen-35b-a3b-bf16` | Qwen3.6-35B-A3B | 1 | BF16 | None |
+| `gemma-4-26b-a4b` | Gemma 4 26B-A4B | 1 | BF16 | NEXTN (MTP) |
+| `gemma-4-31b` | Gemma 4 31B | 1 | BF16 | NEXTN (MTP) |
+
+## Configuration
+
+### Global Configuration
+
+Edit `scripts/config.sh` to change defaults:
+
+```bash
+export MODELS_DIR="$HOME/llms/models"      # Model weights location
+export VENV_DIR="$HOME/llms/sglang_venv"   # Python venv location
+export LOG_DIR="$HOME/llms/sglang_orchestrator/logs"  # Server logs
+```
+
+### Kernel Tuning
+
+1. Launch a model first
+2. From Docker menu, select "Kernel Tuning"
+3. System auto-detects model architecture
+4. Runs FP8 kernel autotuner
+5. Saves configs to `kernel_configs/[device]-[model]/` (git-tracked)
+6. Auto-mounts tuned configs on container launch
+
+### API Keys
+
+Set API keys during launch or via environment variables:
+```bash
+export API_KEY="your-api-key"
+export ADMIN_API_KEY="your-admin-key"
+```
+
 ## File Structure
 
 ```
@@ -150,7 +248,7 @@ sglang_orchestrator/
 │   ├── requirements.txt             ← Python dependencies
 │   └── .gitignore
 ├── scripts/
-│   ├── orchestrator.sh              ← Main TUI entry point (v13.4)
+│   ├── orchestrator.sh              ← Main TUI entry point (v13.5)
 │   ├── intelligence.sh              ← Standalone: scan/launch/download
 │   ├── expose-api.sh                ← Standalone: Nginx/Certbot/UFW
 │   ├── operations.sh                ← Standalone: process management
@@ -160,10 +258,71 @@ sglang_orchestrator/
 │       ├── lib_docker.sh            ← Docker launch/status/kernel tuning
 │       ├── lib_venv.sh              ← VENV launch (standalone)
 │       └── lib_api.sh               ← API exposure wrapper
-└── CLEANUP_PLAN.md                  # Cleanup plan (executed)
+├── references/
+│   └── sglang-server-args.md        ← Server arguments reference
+└── sglang_watchdog.sh               ← Watchdog script
 ```
 
+## Troubleshooting
+
+### Common Issues
+
+**OOM during prefill:**
+- Lower `--chunked-prefill-size` to 4096 or 2048
+
+**OOM during decode:**
+- Lower `--max-running-requests`
+
+**General OOM:**
+- Lower `--mem-fraction-static` (0.8 or 0.7)
+
+**Slow prefill on long prompts:**
+- Raise `--chunked-prefill-size` to 16384 or 32768
+
+**Low throughput:**
+- Raise `--schedule-conservativeness` to 0.3
+- Increase `--mem-fraction-static`
+
+**KV cache thrashing:**
+- Increase `--max-total-tokens`
+- Decrease `--schedule-conservativeness`
+
+**Many short requests:**
+- Use `--schedule-policy lpm` for prefix cache hits
+
+### Diagnostic Commands
+
+```bash
+# Check container status
+docker ps --filter "name=sglang-"
+
+# View logs
+docker logs -f sglang-*
+
+# GPU metrics
+nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv
+
+# Check running processes
+./scripts/operations.sh --list
+```
+
+## Best Practices
+
+1. **Start Conservative:** Begin with conservative power profile for stability
+2. **Monitor GPU:** Use dashboard to track utilization and thermal limits
+3. **Kernel Tune:** Run kernel tuning once per model/GPU combination
+4. **Version Control:** Track kernel configs in git (auto-done)
+5. **API Keys:** Always set API keys for production deployments
+6. **SSL:** Use `--proxy-secure` or `--proxy-harden` for public APIs
+7. **Watchdog:** Consider running `sglang_watchdog.sh` for reliability
+
 ## Changelog
+
+### v13.5 (2026-05-15)
+- Added power profiles (Conservative/Power) for launch
+- Conservative: mem=0.90, reqs=4, conservativeness=1.3
+- Power: mem=0.95, reqs=12, conservativeness=0.8
+- Updated context length default to 262111 (full 256K context)
 
 ### v13.4 (2026-05-13)
 - Added Textual TUI dashboard (`dashboard/`)
