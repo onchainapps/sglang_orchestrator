@@ -193,6 +193,19 @@ bash ~/llms/sglang_orchestrator/dashboard/launch.sh
 ./scripts/expose-api.sh --proxy-harden --api-port 30001 --domain example.com  # + SSL + UFW
 ```
 
+## Quantization: FP8 vs BF16
+
+Understanding the trade-offs between FP8 and BF16 is crucial for optimizing your deployment on Blackwell GPUs.
+
+| Feature | FP8 (Recommended) | BF16 (Reference) |
+|---------|-------------------|------------------|
+| **Performance** | ⚡ **Significantly faster.** Blackwell has dedicated FP8 tensor cores, doubling memory bandwidth efficiency. | 🐢 Slower. Uses standard tensor cores; less optimized for modern inference workloads. |
+| **Accuracy** | ✅ **99%+ retention.** Post-Training Quantization (PTQ) preserves intelligence. Imperceptible drop in chat/coding. | 🏆 **100% Reference.** The baseline precision. Technically superior by <1%. |
+| **VRAM Usage** | 💾 **~14-15 GB** (for 27B model). Leaves massive headroom for KV Cache and concurrent requests. | 💾 **~55 GB** (for 27B model). Eats ~40GB extra VRAM that could be used for context/throughput. |
+| **Hardware Utilization** | 🔥 **Optimal.** Running FP8 on Blackwell is like driving a Ferrari at full throttle. | 🧊 **Underutilized.** Running BF16 on Blackwell is like putting a Ferrari in Economy mode. |
+
+**Recommendation:** Stick to **FP8** unless you have a specific scientific/research requirement for BF16. The 1% theoretical accuracy gain is not worth the 50% performance and memory penalty.
+
 ## Model Profiles
 
 | Profile | Model | TP | Quant | Speculative |
