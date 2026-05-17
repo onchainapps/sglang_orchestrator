@@ -74,19 +74,19 @@ class OrchestratorDashboard(App):
         yield Static("GPU: N/A | VRAM: N/A | Load: N/A", id="status-bar")
         
         with TabbedContent(id="main-tabs"):
-            with TabPane("Containers"):
+            with TabPane("Containers", id="tab-containers"):
                 yield DataTable(id="containers-table")
             
-            with TabPane("Logs"):
+            with TabPane("Logs", id="tab-logs"):
                 yield Static("Select container:", id="log-selector")
                 yield DataTable(id="log-containers-table")
-                yield RichLog(id="log-viewer", wrap=True, markup=True)
+                yield RichLog(id="log-viewer", wrap=True)
             
-            with TabPane("Nginx"):
+            with TabPane("Nginx", id="tab-nginx"):
                 yield DataTable(id="nginx-table")
                 yield RichLog(id="nginx-log", wrap=True)
             
-            with TabPane("Kernel Tuning"):
+            with TabPane("Kernel Tuning", id="tab-kernel"):
                 yield Static("Kernel Tuning Status", id="kernel-status")
                 yield RichLog(id="kernel-log", wrap=True)
         
@@ -253,7 +253,7 @@ class OrchestratorDashboard(App):
     def action_kernel_tuning(self) -> None:
         """Switch to kernel tuning tab."""
         tabbed = self.query_one("#main-tabs", TabbedContent)
-        tabbed.active = "Kernel Tuning"
+        tabbed.active = "tab-kernel"
 
 
 if __name__ == "__main__":
