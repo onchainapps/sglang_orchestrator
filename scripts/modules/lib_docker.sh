@@ -263,20 +263,11 @@ docker_launch_model() {
     local kernel_config_vol=""
     local kernel_config_base="$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs"
     if [ -d "$kernel_config_base" ]; then
-        # Find the best matching config dir (try device-model, then device, then any)
-        local device_name
-        device_name=$(python3 -c "import torch; print(torch.cuda.get_device_name(0).replace(' ', '_').replace('-', '_'))" 2>/dev/null || echo "unknown_gpu")
-        local config_match=""
-        # Try exact device-model match first
-        if ls "$kernel_config_base/${device_name}"-*.json 2>/dev/null | head -1 > /dev/null; then
-            config_match=$(find "$kernel_config_base" -maxdepth 1 -type d -name "${device_name}-*" 2>/dev/null | head -1)
-        fi
-        # Fallback to any config dir
-        if [ -z "$config_match" ]; then
-            config_match=$(find "$kernel_config_base" -maxdepth 1 -type d 2>/dev/null | head -1)
-        fi
-        if [ -n "$config_match" ] && [ "$(find "$config_match" -name '*.json' 2>/dev/null | wc -l)" -gt 0 ]; then
-            kernel_config_vol="-v $config_match:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs"
+        # Check for flat JSON configs in kernel_configs/ (tuning script saves them flat)
+        local json_count
+        json_count=$(find "$kernel_config_base" -maxdepth 1 -name '*.json' -type f 2>/dev/null | wc -l)
+        if [ "$json_count" -gt 0 ]; then
+            kernel_config_vol="-v $kernel_config_base:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs"
         fi
     fi
     local full_cmd="docker run -d --name $container_name --restart unless-stopped --gpus all --cap-add SYS_NICE -v $MODELS_DIR:/models $kernel_config_vol -p $port:$port"
@@ -531,6 +522,56 @@ print(json.dumps({
             unique_shapes+=("$shape")
         fi
     done
+
+    # Detect MoE shapes (gates, experts, router) — tuning script doesn't compute these
+    echo ""
+    echo "🔍 Step 1.5/3: Detecting MoE architecture..."
+    local moe_output
+    moe_output=$(docker exec "$running" python3 -c "
+from transformers import AutoConfig
+config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True)
+tc = getattr(config, 'text_config', config)
+# MoE params
+num_experts = getattr(tc, 'num_experts', 0)
+num_experts_per_tok = getattr(tc, 'num_experts_per_tok', 0)
+if num_experts_per_tok == 0:
+    num_experts_per_tok = getattr(tc, 'top_k', 1)
+expert_intermediate_size = getattr(tc, 'moe_intermediate_size', None)
+if expert_intermediate_size is None:
+    expert_intermediate_size = getattr(tc, 'intermediate_size', None)
+# Router params
+router_dim = getattr(tc, 'moe_router_dim', None)
+if router_dim is None:
+    router_dim = getattr(tc, 'hidden_size', None)
+print(f'{num_experts}|{num_experts_per_tok}|{expert_intermediate_size}|{router_dim}')
+" 2>&1)
+    local num_experts num_experts_per_tok expert_intermediate_size router_dim
+    IFS='|' read -r num_experts num_experts_per_tok expert_intermediate_size router_dim <<< "$moe_output"
+    
+    if [ -n "$num_experts" ] && [ "$num_experts" -gt 1 ] 2>/dev/null; then
+        echo "   MoE: $num_experts experts, $num_experts_per_tok per token"
+        echo "   Expert intermediate: $expert_intermediate_size, Router dim: $router_dim"
+        
+        # MoE gate: N=num_experts, K=hidden_size (or router_dim)
+        local gate_n="${num_experts}"
+        local gate_k="${router_dim:-$hidden_size}"
+        unique_shapes+=("${gate_n},${gate_k}")
+        echo "   Adding MoE gate: N=$gate_n, K=$gate_k"
+        
+        # MoE expert up: N=expert_intermediate_size, K=hidden_size
+        if [ -n "$expert_intermediate_size" ] && [ "$expert_intermediate_size" != "None" ]; then
+            unique_shapes+=("${expert_intermediate_size},${hidden_size}")
+            echo "   Adding MoE expert up: N=$expert_intermediate_size, K=$hidden_size"
+        fi
+        
+        # MoE expert down: N=hidden_size, K=expert_intermediate_size
+        if [ -n "$expert_intermediate_size" ] && [ "$expert_intermediate_size" != "None" ]; then
+            unique_shapes+=("${hidden_size},${expert_intermediate_size}")
+            echo "   Adding MoE expert down: N=$hidden_size, K=$expert_intermediate_size"
+        fi
+    else
+        echo "   No MoE layers detected (dense model)"
+    fi
 
     local shapes_tuned=0
     for shape in "${unique_shapes[@]}"; do
