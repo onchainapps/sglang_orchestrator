@@ -290,7 +290,7 @@ docker_launch_model() {
         chunk_size=$CONSERVATIVE_CHUNK_PREFILL
     fi
 
-    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-queued-requests 8 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens $max_prefill --allow-auto-truncate --schedule-policy lpm --schedule-conservativeness $conservativeness --watchdog-timeout 120 --trust-remote-code --host 0.0.0.0 --port $port"
+    full_cmd="$full_cmd $image sglang serve --model-path /models/$hf_repo --tp $tp --mem-fraction-static $mem_frac --context-length $ctx_len --max-running-requests $reqs --max-queued-requests 8 --max-total-tokens $ctx_len --chunked-prefill-size $chunk_size --max-prefill-tokens $max_prefill --allow-auto-truncate --schedule-policy lpm --schedule-conservativeness $conservativeness --watchdog-timeout 120 --trust-remote-code --host 0.0.0.0 --port $port --enable-hierarchical-cache --hicache-ratio 2 --kv-cache-dtype fp8_e4m3"
 
     # SGLang API key authentication
     if [ -n "${API_KEY:-}" ]; then
@@ -368,6 +368,21 @@ tune_kernels() {
     sleep 3
     echo "✅ Container stopped."
 
+    # Setup cleanup trap: ensure original container restarts even on error/interrupt
+    local temp_container=""
+    cleanup() {
+        if [ -n "$temp_container" ]; then
+            echo "🧹 Cleaning up temporary container..."
+            docker stop "$temp_container" 2>/dev/null
+            docker rm "$temp_container" 2>/dev/null
+        fi
+        if docker inspect "$running" --format '{{.State.Running}}' 2>/dev/null | grep -q "false"; then
+            echo "⚠️  Original container was not running. Restarting..."
+            docker start "$running" 2>&1
+        fi
+    }
+    trap cleanup EXIT
+
     # Get the model path from the container's command
     local actual_model_path
     actual_model_path=$(echo "$container_cmd" | grep -oP '(?<=--model-path )[^ ]+' || true)
@@ -384,12 +399,12 @@ tune_kernels() {
     # Start a temporary container for detection and tuning (no model loaded = free GPU memory)
     echo ""
     echo "🔬 Starting temporary container for tuning..."
-    local temp_container="sglang-tune-$$"
+    temp_container="sglang-tune-$$"
     
     # Build docker run command for temp container
     local docker_run="docker run -d --name $temp_container --gpus all"
-    docker_run+=" -v /home/ubuntu/llms/models:/models:ro"
-    docker_run+=" -v /home/ubuntu/llms/sglang_orchestrator/kernel_configs:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs:rw"
+    docker_run+=" -v $MODELS_DIR:/models:ro"
+    docker_run+=" -v $SCRIPT_DIR/../kernel_configs:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs:rw"
     docker_run+=" -w /sgl-workspace/sglang"
     docker_run+=" $container_image"
     docker_run+=" sleep 3600"  # Keep running for 1 hour
@@ -636,5 +651,4 @@ print(f'{num_experts}|{num_experts_per_tok}|{expert_intermediate_size}|{router_d
     echo "   Configs saved to: $config_dir/"
     echo "   Press Enter to return to menu..."
     read -r
-}
 }
