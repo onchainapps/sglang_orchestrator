@@ -339,64 +339,96 @@ tune_kernels() {
     echo ""
     echo "🔧 Kernel Tuning for container: $running"
     echo "   This will auto-tune Triton FP8 kernels for your GPU."
-    echo "   Takes 10-20 minutes (benchmarks every config combination)."
+    echo "   Takes ~60-90 min per shape (benchmarks every config)."
     echo "   Results are saved to sglang_orchestrator/kernel_configs/ (git-tracked)."
-    read -p "Start tuning? (y/n): " confirm
+    echo ""
+    echo "⚠️  IMPORTANT: Tuning requires GPU memory. The SGLang server will be stopped"
+    echo "   temporarily during tuning and restarted afterward."
+    read -p "Continue? (y/n): " confirm
     if [[ "$confirm" != "y" ]]; then
         echo "Cancelled."
         read -p "Press Enter to return to menu..."
         return
     fi
 
-    # Get the actual model path from the running SGLang process
+    # Get container info before stopping
+    local container_image
+    container_image=$(docker inspect "$running" --format '{{.Config.Image}}' 2>/dev/null)
+    local container_mounts
+    container_mounts=$(docker inspect "$running" --format '{{json .Mounts}}' 2>/dev/null)
+    local container_env
+    container_env=$(docker inspect "$running" --format '{{json .Config.Env}}' 2>/dev/null)
+    local container_cmd
+    container_cmd=$(docker inspect "$running" --format '{{json .Config.Cmd}}' 2>/dev/null)
+
+    # Stop the SGLang container to free GPU memory
+    echo ""
+    echo "🛑 Stopping SGLang container: $running"
+    docker stop "$running" 2>&1
+    sleep 3
+    echo "✅ Container stopped."
+
+    # Get the model path from the container's command
     local actual_model_path
-    actual_model_path=$(docker exec "$running" sh -c "ps aux | grep 'sglang serve' | grep -v grep | grep -oP '(?<=--model-path )[^ ]+'" 2>/dev/null)
-    if [ -z "$actual_model_path" ] || [ "$actual_model_path" = "/models" ]; then
-        # Fallback: scan /models for subdirs with config.json
-        actual_model_path=$(docker exec "$running" find /models -maxdepth 2 -name "config.json" 2>/dev/null | head -1 | xargs dirname)
-    fi
+    actual_model_path=$(echo "$container_cmd" | grep -oP '(?<=--model-path )[^ ]+' || true)
     actual_model_path="${actual_model_path:-/models}"
 
     # Detect device and model for config subdirectory naming
     local device_name
-    device_name=$(docker exec "$running" python3 -c "import torch; print(torch.cuda.get_device_name(0).replace(' ', '_').replace('-', '_'))" 2>/dev/null)
+    device_name=$(nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -1 | sed 's/ /_/g; s/-/_/g')
     local device_slug="${device_name:-unknown_gpu}"
-
-    local model_repo
-    model_repo=$(docker exec "$running" python3 -c "
-from transformers import AutoConfig
-config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True)
-# Try to detect model name from config
-print(getattr(config, 'model_type', 'unknown'))
-" 2>/dev/null)
-    local model_slug="${model_repo:-unknown_model}"
 
     local config_dir="$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs"
     mkdir -p "$config_dir"
 
-    # Step 1: Detect model architecture from container (single pass, handles nested configs)
+    # Start a temporary container for detection and tuning (no model loaded = free GPU memory)
+    echo ""
+    echo "🔬 Starting temporary container for tuning..."
+    local temp_container="sglang-tune-$$"
+    
+    # Build docker run command for temp container
+    local docker_run="docker run -d --name $temp_container --gpus all"
+    docker_run+=" -v /home/ubuntu/llms/models:/models:ro"
+    docker_run+=" -v /home/ubuntu/llms/sglang_orchestrator/kernel_configs:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs:rw"
+    docker_run+=" -w /sgl-workspace/sglang"
+    docker_run+=" $container_image"
+    docker_run+=" sleep 3600"  # Keep running for 1 hour
+    
+    eval "$docker_run" 2>&1
+    sleep 5
+    
+    # Verify temp container is running
+    if ! docker ps --filter "name=$temp_container" --format "{{.Names}}" | grep -q "$temp_container"; then
+        echo "❌ Failed to start temporary container."
+        echo "   Starting original container..."
+        docker start "$running" 2>&1
+        read -p "Press Enter to return to menu..."
+        return 1
+    fi
+    
+    echo "✅ Temporary container started."
+
+    # Step 1: Detect model architecture
     echo ""
     echo "📐 Step 1/3: Detecting model architecture..."
     echo "   Model path: $actual_model_path"
+    
     local arch_output
-    arch_output=$(docker exec "$running" python3 -c "
+    arch_output=$(docker exec "$temp_container" python3 -c "
 from transformers import AutoConfig
 import json
 config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True)
-# qwen3_5 nests text config under text_config; fallback to top-level for older models
 tc = getattr(config, 'text_config', config)
 mtp_layers = getattr(tc, 'mtp_num_hidden_layers', 0)
 mtp_intermediate = getattr(tc, 'mtp_intermediate_size', None)
 mtp_heads = getattr(tc, 'mtp_num_attention_heads', None)
 mtp_kv_heads = getattr(tc, 'mtp_num_key_value_heads', None)
 mtp_head_dim = getattr(tc, 'mtp_head_dim', None)
-# Qwen3.5 MTP: derive from linear config + known ratios when not explicit
 if mtp_heads is None:
     mtp_heads = getattr(tc, 'linear_num_key_heads', 0) + getattr(tc, 'linear_num_value_heads', 0)
     if mtp_heads == 0:
         mtp_heads = tc.num_attention_heads
 if mtp_intermediate is None and mtp_heads > 0:
-    # Qwen3.5 MTP intermediate = mtp_heads * head_dim * 7 / 16
     mtp_intermediate = int(mtp_heads * tc.head_dim * 7 // 16)
 if mtp_kv_heads is None:
     mtp_kv_heads = mtp_heads // 8
@@ -415,123 +447,91 @@ print(json.dumps({
     'mtp_head_dim': mtp_head_dim,
 }))
 " 2>&1)
+    
     local parse_err
     parse_err=$(echo "$arch_output" | grep -i "error\|exception\|traceback" || true)
+    local hidden_size=5120 intermediate_size=17408 num_heads=24 num_kv_heads=4 head_dim=256
+    local mtp_layers=1 mtp_intermediate_size=17408 mtp_heads=24 mtp_kv_heads=16 mtp_head_dim=256
+    
     if [ -z "$parse_err" ]; then
         hidden_size=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['hidden_size'])" 2>/dev/null)
         intermediate_size=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['intermediate_size'])" 2>/dev/null)
         num_heads=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['num_attention_heads'])" 2>/dev/null)
         num_kv_heads=$(echo "$arch_output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['num_key_value_heads'] or '')" 2>/dev/null)
         head_dim=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['head_dim'])" 2>/dev/null)
-        local mtp_layers
         mtp_layers=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['mtp_layers'])" 2>/dev/null)
-        local mtp_intermediate_size
         mtp_intermediate_size=$(echo "$arch_output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['mtp_intermediate_size'] or '')" 2>/dev/null)
-        local mtp_heads
         mtp_heads=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['mtp_num_attention_heads'])" 2>/dev/null)
-        local mtp_kv_heads
         mtp_kv_heads=$(echo "$arch_output" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['mtp_num_key_value_heads'] or '')" 2>/dev/null)
-        local mtp_head_dim
         mtp_head_dim=$(echo "$arch_output" | python3 -c "import sys,json; print(json.load(sys.stdin)['mtp_head_dim'])" 2>/dev/null)
     else
-        echo "⚠️  Could not auto-detect architecture. Error: $(echo "$arch_output" | head -2)"
-        echo "   Falling back to default params. Output:"
-        echo "$arch_output" | head -5 | sed 's/^/   /'
-        hidden_size=5120
-        intermediate_size=17408
-        num_heads=24
-        num_kv_heads=4
-        head_dim=256
-        mtp_layers=1
-        mtp_intermediate_size=17408
-        mtp_heads=24
-        mtp_kv_heads=16
-        mtp_head_dim=256
+        echo "⚠️  Could not auto-detect architecture. Using defaults."
     fi
-    if [ -z "$num_kv_heads" ] || [ "$num_kv_heads" = "" ]; then
-        # MHA: num_kv_heads = num_heads
-        num_kv_heads=$num_heads
-    fi
+    [ -z "$num_kv_heads" ] || [ "$num_kv_heads" = "" ] && num_kv_heads=$num_heads
 
     echo "   hidden_size: $hidden_size"
     echo "   intermediate_size: $intermediate_size"
     echo "   num_heads: $num_heads"
     echo "   num_kv_heads: $num_kv_heads"
     echo "   head_dim: $head_dim"
-    if [ "$mtp_layers" -gt 0 ] 2>/dev/null; then
+    [ "$mtp_layers" -gt 0 ] 2>/dev/null && {
         echo "   MTP layers: $mtp_layers"
         echo "   MTP intermediate_size: $mtp_intermediate_size"
         echo "   MTP num_heads: $mtp_heads"
         echo "   MTP num_kv_heads: $mtp_kv_heads"
         echo "   MTP head_dim: $mtp_head_dim"
-    fi
+    }
 
     # Step 2: Compute weight shapes and tune each
     echo ""
     echo "🔧 Step 2/3: Running kernel autotuner..."
 
-    # QKV projection: Q(num_heads*head_dim) + K(num_kv_heads*head_dim) + V(num_kv_heads*head_dim)
     local qkv_out=$((num_heads * head_dim + 2 * num_kv_heads * head_dim))
     local mlp_gate_up=$((2 * intermediate_size))
     local o_proj_in=$((num_heads * head_dim))
 
-    # Weight shapes to tune: (N, K)
     local -a shapes=()
-    shapes+=("$qkv_out,$hidden_size")       # QKV projection
-    shapes+=("$mlp_gate_up,$hidden_size")   # MLP gate+up (SwiGLU)
-    shapes+=("$hidden_size,$intermediate_size")  # MLP down projection
-    shapes+=("$hidden_size,$o_proj_in")     # Output projection
-    shapes+=("$hidden_size,$hidden_size")   # RMN, Gate, etc.
+    shapes+=("$qkv_out,$hidden_size")
+    shapes+=("$mlp_gate_up,$hidden_size")
+    shapes+=("$hidden_size,$intermediate_size")
+    shapes+=("$hidden_size,$o_proj_in")
+    shapes+=("$hidden_size,$hidden_size")
 
-    # MTP shapes (if MTP layers exist)
-    local mtp_has_dedicated_config=false
-    if [ -n "$mtp_intermediate_size" ] && [ "$mtp_intermediate_size" != "$intermediate_size" ] 2>/dev/null; then
-        mtp_has_dedicated_config=true
-    fi
+    # MTP shapes
     if [ "$mtp_layers" -gt 0 ] 2>/dev/null && [ -n "$mtp_intermediate_size" ] && [ "$mtp_intermediate_size" != "" ]; then
-        local mtp_q_out=$((mtp_heads * mtp_head_dim))              # MTP Q projection (separate)
-        local mtp_kv_out=$((2 * mtp_kv_heads * mtp_head_dim))     # MTP KV projection (separate)
+        local mtp_q_out=$((mtp_heads * mtp_head_dim))
+        local mtp_kv_out=$((2 * mtp_kv_heads * mtp_head_dim))
         local mtp_mlp_gate_up=$((2 * mtp_intermediate_size))
         local mtp_o_proj_in=$((mtp_heads * mtp_head_dim))
 
-        shapes+=("$mtp_q_out,$hidden_size")           # MTP Q projection
-        shapes+=("$mtp_kv_out,$hidden_size")          # MTP KV projection
-        shapes+=("$mtp_mlp_gate_up,$hidden_size")    # MTP MLP gate+up (SwiGLU)
-        shapes+=("$hidden_size,$mtp_intermediate_size")  # MTP MLP down projection
-        shapes+=("$hidden_size,$mtp_o_proj_in")     # MTP Output projection
+        shapes+=("$mtp_q_out,$hidden_size")
+        shapes+=("$mtp_kv_out,$hidden_size")
+        shapes+=("$mtp_mlp_gate_up,$hidden_size")
+        shapes+=("$hidden_size,$mtp_intermediate_size")
+        shapes+=("$hidden_size,$mtp_o_proj_in")
         echo "   MTP Q: N=$mtp_q_out, K=$hidden_size"
         echo "   MTP KV: N=$mtp_kv_out, K=$hidden_size"
         echo "   MTP MLP: N=$mtp_mlp_gate_up, K=$hidden_size"
-        if [ "$mtp_has_dedicated_config" = false ]; then
-            echo "   (MTP shares main model architecture — no additional shapes to tune)"
-        fi
     fi
 
-    # Remove duplicate shapes
+    # Remove duplicates
     local -a unique_shapes=()
-    local root_kernel_dir="$(cd "$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs" && pwd)"
     for shape in "${shapes[@]}"; do
         local found=0
         for unique in "${unique_shapes[@]+${unique_shapes[@]}}"; do
-            if [ "$shape" = "$unique" ]; then
-                found=1
-                break
-            fi
+            [ "$shape" = "$unique" ] && { found=1; break; }
         done
-        if [ $found -eq 0 ]; then
-            unique_shapes+=("$shape")
-        fi
+        [ $found -eq 0 ] && unique_shapes+=("$shape")
     done
 
-    # Detect MoE shapes (gates, experts, router) — tuning script doesn't compute these
+    # Detect MoE shapes
     echo ""
     echo "🔍 Step 1.5/3: Detecting MoE architecture..."
     local moe_output
-    moe_output=$(docker exec "$running" python3 -c "
+    moe_output=$(docker exec "$temp_container" python3 -c "
 from transformers import AutoConfig
 config = AutoConfig.from_pretrained('$actual_model_path', trust_remote_code=True)
 tc = getattr(config, 'text_config', config)
-# MoE params
 num_experts = getattr(tc, 'num_experts', 0)
 num_experts_per_tok = getattr(tc, 'num_experts_per_tok', 0)
 if num_experts_per_tok == 0:
@@ -539,33 +539,27 @@ if num_experts_per_tok == 0:
 expert_intermediate_size = getattr(tc, 'moe_intermediate_size', None)
 if expert_intermediate_size is None:
     expert_intermediate_size = getattr(tc, 'intermediate_size', None)
-# Router params
 router_dim = getattr(tc, 'moe_router_dim', None)
 if router_dim is None:
     router_dim = getattr(tc, 'hidden_size', None)
 print(f'{num_experts}|{num_experts_per_tok}|{expert_intermediate_size}|{router_dim}')
 " 2>&1)
-    local num_experts num_experts_per_tok expert_intermediate_size router_dim
+    
+    local num_experts=0 num_experts_per_tok=1 expert_intermediate_size="" router_dim=""
     IFS='|' read -r num_experts num_experts_per_tok expert_intermediate_size router_dim <<< "$moe_output"
     
     if [ -n "$num_experts" ] && [ "$num_experts" -gt 1 ] 2>/dev/null; then
         echo "   MoE: $num_experts experts, $num_experts_per_tok per token"
         echo "   Expert intermediate: $expert_intermediate_size, Router dim: $router_dim"
         
-        # MoE gate: N=num_experts, K=hidden_size (or router_dim)
         local gate_n="${num_experts}"
         local gate_k="${router_dim:-$hidden_size}"
         unique_shapes+=("${gate_n},${gate_k}")
         echo "   Adding MoE gate: N=$gate_n, K=$gate_k"
         
-        # MoE expert up: N=expert_intermediate_size, K=hidden_size
         if [ -n "$expert_intermediate_size" ] && [ "$expert_intermediate_size" != "None" ]; then
             unique_shapes+=("${expert_intermediate_size},${hidden_size}")
             echo "   Adding MoE expert up: N=$expert_intermediate_size, K=$hidden_size"
-        fi
-        
-        # MoE expert down: N=hidden_size, K=expert_intermediate_size
-        if [ -n "$expert_intermediate_size" ] && [ "$expert_intermediate_size" != "None" ]; then
             unique_shapes+=("${hidden_size},${expert_intermediate_size}")
             echo "   Adding MoE expert down: N=$hidden_size, K=$expert_intermediate_size"
         fi
@@ -574,11 +568,13 @@ print(f'{num_experts}|{num_experts_per_tok}|{expert_intermediate_size}|{router_d
     fi
 
     local shapes_tuned=0
+    local root_kernel_dir="$(cd "$(dirname "$(dirname "$SCRIPT_DIR")")/kernel_configs" && pwd)"
+    
     for shape in "${unique_shapes[@]}"; do
         local n="${shape%%,*}"
         local k="${shape##*,}"
 
-        # Skip if config already exists in root kernel_configs/
+        # Skip if config already exists
         if find "$root_kernel_dir" -maxdepth 1 -name "N=${n},K=${k},*.json" -type f 2>/dev/null | head -1 | grep -q .; then
             echo "   Skipping N=$n, K=$k (config exists)"
             continue
@@ -586,26 +582,31 @@ print(f'{num_experts}|{num_experts_per_tok}|{expert_intermediate_size}|{router_d
 
         shapes_tuned=$((shapes_tuned + 1))
         echo "   Tuning N=$n, K=$k..."
-        docker exec "$running" python3 benchmark/kernels/quantization/tuning_block_wise_kernel.py \
+        docker exec "$temp_container" python3 benchmark/kernels/quantization/tuning_block_wise_kernel.py \
             --N "$n" --K "$k" --input-type fp8 \
-            --save-path python/sglang/srt/layers/quantization/configs 2>&1
+            --save-path python/sglang/srt/layers/quantization/configs 2>&1 | tail -3
         echo ""
     done
 
     if [ "$shapes_tuned" -eq 0 ]; then
         echo ""
         echo "✅ All weight shapes already tuned — no new configs needed."
-        echo "   Press Enter to return to menu..."
-        read -r
+        # Clean up temp container
+        docker stop "$temp_container" 2>/dev/null
+        docker rm "$temp_container" 2>/dev/null
+        # Restart original container
+        echo "🔄 Restarting SGLang container: $running"
+        docker start "$running" 2>&1
+        echo "✅ Done."
+        read -p "Press Enter to return to menu..."
         return 0
     fi
 
-    # Step 3: Copy configs back to host (overwrite tuned shapes, preserve others)
+    # Step 3: Copy configs back to host
     echo ""
     echo "💾 Step 3/3: Saving tuned configs to host..."
-    # docker cp creates a nested 'configs/' dir; flatten it
     local tmp_cp=$(mktemp -d)
-    docker cp "$running:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs/" \
+    docker cp "$temp_container:/sgl-workspace/sglang/python/sglang/srt/layers/quantization/configs/" \
         "$tmp_cp/" 2>&1
     if [ -d "$tmp_cp/configs" ]; then
         cp -f "$tmp_cp/configs"/*.json "$config_dir/" 2>/dev/null
@@ -616,13 +617,24 @@ print(f'{num_experts}|{num_experts_per_tok}|{expert_intermediate_size}|{router_d
     local config_count
     config_count=$(find "$config_dir" -name "*.json" 2>/dev/null | wc -l)
     echo "   Saved $config_count config files to $config_dir/"
-    echo "   Device: $device_name"
-    echo "   Model: $model_slug"
+    echo "   Device: $device_slug"
+
+    # Clean up temp container
+    echo ""
+    echo "🧹 Cleaning up temporary container..."
+    docker stop "$temp_container" 2>/dev/null
+    docker rm "$temp_container" 2>/dev/null
+
+    # Restart original container
+    echo "🔄 Restarting SGLang container: $running"
+    docker start "$running" 2>&1
+    sleep 5
+    echo "✅ Container restarted."
 
     echo ""
     echo "✅ Kernel tuning complete!"
     echo "   Configs saved to: $config_dir/"
-    echo "   These are auto-mounted on next launch."
-    echo "   Commit them to git to share across machines."
-    read -p "Press Enter to return to menu..."
+    echo "   Press Enter to return to menu..."
+    read -r
+}
 }
